@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoltHub — T2G Platform Prototype</title>
+<style>
+ :root {
+ --bg: #0b1220; --panel: #131c2e; --panel2: #1a2540; --line: #26314d;
+ --txt: #dbe4f5; --muted: #8294b5; --acc: #2dd4bf; --acc2: #7c8cf8;
+ --warn: #f59e0b; --bad: #f87171; --good: #34d399;
+ }
+ * { box-sizing: border-box; margin: 0; padding: 0; }
+ body { background: var(--bg); color: var(--txt); font: 14px/1.5 "Segoe UI", system-ui, sans-serif; }
+ header { display: flex; align-items: center; gap: 18px; padding: 14px 22px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+ header h1 { font-size: 19px; letter-spacing: .4px; }
+ header h1 span { color: var(--acc); }
+ header .sub { color: var(--muted); font-size: 12px; }
+ nav { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+ nav button { background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 13px; }
+ nav button.active { background: var(--acc2); color: #fff; border-color: var(--acc2); }
+ main { padding: 18px 22px; max-width: 1280px; margin: 0 auto; }
+ .tab { display: none; }
+ .tab.active { display: block; }
+ .grid2 { display: grid; grid-template-columns: 330px 1fr; gap: 16px; }
+ @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+ .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+ .card h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--acc); margin-bottom: 12px; }
+ label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 3px; }
+ select, input[type=number] { width: 100%; background: var(--panel2); color: var(--txt); border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px; font-size: 13px; }
+ input[type=range] { width: 100%; accent-color: var(--acc); }
+ .val { color: var(--txt); font-weight: 600; }
+ .btn { display: inline-block; background: var(--acc); color: #06281f; border: 0; border-radius: 8px; padding: 10px 18px; font-weight: 700; cursor: pointer; font-size: 14px; margin-top: 14px; }
+ .btn.secondary { background: var(--acc2); color: #fff; }
+ .btn:disabled { opacity: .4; cursor: default; }
+ .kpi-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+ .kpi { flex: 1; min-width: 140px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+ .opt { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; background: var(--panel2); }
+ .opt:hover { border-color: var(--acc2); }
+ .opt.best { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc); }
+ .opt .name { font-weight: 700; }
+ .opt .badge { display: inline-block; font-size: 10px; padding: 1px 7px; border-radius: 20px; margin-left: 6px; vertical-align: 1px; }
+ .badge.v2g { background: #134e4a; color: var(--acc); }
+ .badge.dc { background: #3b2f14; color: var(--warn); }
+ .badge.ac { background: #1e2b4d; color: var(--acc2); }
+ .opt .row { display: flex; gap: 14px; color: var(--muted); font-size: 12px; margin-top: 4px; flex-wrap: wrap; }
+ .opt .cost { margin-left: auto; font-weight: 700; color: var(--txt); font-size: 15px; }
+ .opt .cost.neg { color: var(--good); }
+ canvas { width: 100%; display: block; }
+ table { width: 100%; border-collapse: collapse; font-size: 13px; }
+ th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+ th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+ td.num, th.num { text-align: right; }
+ .legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-top: 8px; flex-wrap: wrap; }
+ .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+ .modechip { display:inline-block; padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 12px; }
+ .mode-charging { background: #134e4a; color: var(--acc); }
+ .mode-v2g_discharge { background: #4c1d1d; color: var(--bad); }
+ .mode-idle { background: #333; color: #aaa; }
+ .note { color: var(--muted); font-size: 12px; margin-top: 10px; }
+ .flow { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 10px 0; }
+ .flow .node { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; text-align: center; font-weight: 700; }
+ .flow .arrow { font-size: 22px; color: var(--muted); }
+ .flow .arrow.live { color: var(--acc); animation: pulse 1s infinite; }
+ .flow .arrow.live.rev { color: var(--bad); }
+ @keyframes pulse { 50% { opacity: .35; } }
+ .footer-note { color: var(--muted); font-size: 11px; text-align: center; margin: 26px 0 10px; }
+ #liveTicker { display: flex; gap: 6px; margin-left: 10px; flex-wrap: wrap; }
+ #liveTicker .tick { background: var(--panel2); border: 1px solid var(--line); padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+ #liveTicker .tick b { color: var(--acc); }
+ #liveTicker .tick.pulse { animation: pulse 2s infinite; }
+ .tip { position: absolute; background: #0b1220ee; border: 1px solid var(--acc); border-radius: 8px; padding: 6px 10px; font-size: 12px; pointer-events: none; display: none; z-index: 5; white-space: nowrap; }
+ #langSwitch { display: flex; gap: 4px; margin-left: 10px; }
+ #langSwitch button { background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 7px; padding: 5px 11px; cursor: pointer; font-size: 12px; font-weight: 700; }
+ #langSwitch button.active { background: var(--acc); color: #06281f; border-color: var(--acc); }
+</style>
+</head>
+<body>
+<header>
+ <h1>Volt<span>Hub</span> T2G</h1>
+ <div class="sub" data-i18n="sub">Plateforme Transport-to-Grid — recharge intelligente · V2G · empilement de valeur<br>Prototype — Proj5</div>
+ <div id="liveTicker">
+ <span class="tick pulse" id="tickPrice">—</span>
+ <span class="tick" id="tickCo2">—</span>
+ <span class="tick" id="tickHour">—</span>
+ </div>
+ <div id="langSwitch">
+ <button data-lang="fr" class="active">FR</button>
+ <button data-lang="en">EN</button>
+ </div>
+ <nav>
+ <button class="active" data-tab="plan">1 · Recharge intelligente</button>
+ <button data-tab="session">2 · Session en direct</button>
+ <button data-tab="stack">3 · Modèles &amp; valeur</button>
+ <button data-tab="grid">4 · Analyse réseau</button>
+ <button data-tab="fleet">5 · Flotte mobile</button>
+ <button data-tab="exp">6 · Retours d'expérience</button>
+ </nav>
+</header>
+<main>
+
+ <!-- ============ TAB 1 : SMART CHARGING ============ -->
+ <section id="tab-plan" class="tab active">
+ <div class="grid2">
+ <div class="card">
+ <h3 data-i18n="reqTitle">Demande du conducteur</h3>
+ <label data-i18n="vehicle">Véhicule</label><select id="vehicle"></select>
+ <label><span data-i18n="battery">Batterie actuelle</span> — <span class="val" id="socVal">45%</span></label>
+ <input type="range" id="soc" min="10" max="95" value="45">
+ <label><span data-i18n="target">SoC cible</span> — <span class="val" id="targetVal">80%</span></label>
+ <input type="range" id="target" min="30" max="100" value="80">
+ <label data-i18n="destination">Destination</label><select id="destination"></select>
+ <label data-i18n="window">Durée de stationnement (heures)</label><input type="number" id="window" value="10" min="1" max="24">
+ <label data-i18n="startHour">Heure d'arrivée (0–23)</label><input type="number" id="startHour" value="17" min="0" max="23">
+ <label style="display:flex;align-items:center;gap:8px;margin-top:14px;">
+ <input type="checkbox" id="v2g" checked style="width:auto;accent-color:var(--acc);"> <span data-i18n="v2gAllow">Activer le V2G (bidirectionnel)</span>
+ </label>
+ <label style="display:flex;align-items:center;gap:8px;">
+ <input type="checkbox" id="deg" style="width:auto;accent-color:var(--warn);"> <span data-i18n="degAllow">Inclure l'usure batterie V2G (≈ 0,07 €/kWh cyclé)</span>
+ </label>
+ <button class="btn" id="btnOptimize" style="width:100%;text-align:center;" data-i18n="btnOptimize">Optimiser le plan de recharge</button>
+ <div class="note" data-i18n="optNote">Le moteur classe chaque borne selon <b>coût net + temps + détour</b>, planifie la recharge dans les créneaux horaires les moins chers et — si le V2G est activé — <b>revend l'énergie au réseau pendant le pic du soir</b>.</div>
+ </div>
+ <div>
+ <div class="card" style="margin-bottom:16px;">
+ <h3 data-i18n="mapTitle">Carte de la ville — réseau de recharge</h3>
+ <div id="mapWrap" style="position:relative;">
+ <canvas id="map" width="900" height="430"></canvas>
+ <div class="tip" id="mapTip"></div>
+ </div>
+ <div class="legend">
+ <span><span class="dot" style="background:#f59e0b"></span><span data-i18n="mapLeg1">DC rapide (50–150 kW)</span></span>
+ <span><span class="dot" style="background:#7c8cf8"></span><span data-i18n="mapLeg2">CA (7–22 kW)</span></span>
+ <span><span class="dot" style="background:#2dd4bf"></span><span data-i18n="mapLeg3"> compatible V2G</span></span>
+ <span><span class="dot" style="background:#f87171"></span><span data-i18n="mapLeg4">Destination</span></span>
+ <span><span class="dot" style="background:#ffffff"></span><span data-i18n="mapLeg5">Recommandée</span></span>
+ </div>
+ </div>
+ <div class="card">
+ <h3 data-i18n="optTitle">Options classées — lieux · temps · durée · coût</h3>
+ <div id="options"><div class="note">Réglez votre trajet puis cliquez sur <b>Optimiser le plan de recharge</b>.</div></div>
+ <div id="planWrap" style="position:relative;display:none;">
+ <canvas id="planChart" width="880" height="230" style="margin-top:10px;"></canvas>
+ <div class="tip" id="planTip"></div>
+ </div>
+ <div class="legend" id="planLegend" style="display:none;">
+ <span><span class="dot" style="background:#2dd4bf"></span><span data-i18n="planLeg1">Recharge (kW)</span></span>
+ <span><span class="dot" style="background:#f87171"></span><span data-i18n="planLeg2">Décharge V2G (kW)</span></span>
+ <span><span class="dot" style="background:#7c8cf8"></span><span data-i18n="planLeg3">Prix €/kWh (courbe)</span></span>
+ </div>
+ </div>
+ <div class="card" style="margin-top:16px;">
+ <h3 data-i18n="tripTitle">Planificateur de trajet</h3>
+ <label data-i18n="tripOrigin">Point de départ</label>
+ <select id="tripOrigin"></select>
+ <button class="btn secondary" id="btnTrip" style="width:100%;text-align:center;" data-i18n="tripBtn">Vérifier si un arrêt est nécessaire</button>
+ <div id="tripResult"></div>
+ </div>
+ </div>
+ </div>
+ </section>
+
+
+
+ <!-- ============ TAB 3 : MODÈLES & VALEUR ============ -->
+ <section id="tab-stack" class="tab">
+ <div class="grid2">
+ <div class="card">
+ <h3 data-i18n="portTitle">Paramètres du portefeuille</h3>
+ <label data-i18n="fleetSize">Taille de la flotte (véhicules sur la plateforme)</label><input type="number" id="fleet" value="500" min="1">
+ <label data-i18n="v2gShare">Part compatible V2G (%)</label><input type="number" id="v2gShare" value="40" min="0" max="100">
+ <label data-i18n="kwhDay">Énergie par véhicule et par jour (kWh)</label><input type="number" id="kwhDay" value="15" min="1">
+ <button class="btn" id="btnStack" style="width:100%;text-align:center;" data-i18n="btnStack">Calculer l'empilement de valeur</button>
+ <div class="note" data-i18n="stackNote">Reprend les <b>4 modèles économiques T2G</b> du livre blanc Guidehouse : Infrastructure Developer, Charging Service Provider, Load Orchestrator et Mobility Provider — et montre le <b>bonus d'empilement de valeur</b> obtenu en les combinant plutôt qu'en n'en exploitant qu'un seul.</div>
+ </div>
+ <div>
+ <div class="kpi-row">
+ <div class="kpi"><div class="n" id="vsTotal">—</div><div class="l" data-i18n="vsTotal">Total € / an</div></div>
+ <div class="kpi"><div class="n" id="vsPerVeh">—</div><div class="l" data-i18n="vsPerVeh">€ / véhicule / an</div></div>
+ <div class="kpi"><div class="n" id="vsBonus" style="color:var(--good)">—</div><div class="l" data-i18n="vsBonus">Bonus vs recharge seule</div></div>
+ </div>
+ <div class="card"><h3 data-i18n="chartTitle">Revenus annuels par modèle économique</h3><canvas id="stackChart" width="880" height="300"></canvas></div>
+ <div class="card" style="margin-top:14px;"><h3 data-i18n="detailTitle">Détail</h3><table id="stackTable"><thead><tr><th data-i18n="thModel">Modèle (Guidehouse)</th><th data-i18n="thRevenue" class="num">Revenus €/an</th><th data-i18n="thHow">Comment l'argent est gagné</th></tr></thead><tbody></tbody></table></div>
+ </div>
+ </div>
+ <div class="card" style="margin-top:16px;">
+ <h3 data-i18n="beTitle">Rentabilité d'une borne — point mort (CAPEX / OPEX)</h3>
+ <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+ <div style="flex:1;min-width:200px;">
+ <label data-i18n="beType">Type de borne</label>
+ <select id="beType">
+ <option value="AC7" data-i18n="beT1">CA 7 kW — domicile / copropriété</option>
+ <option value="AC22" data-i18n="beT2">CA 22 kW — parking / entreprise</option>
+ <option value="DC50" data-i18n="beT3">DC 50 kW — urbain</option>
+ <option value="DC150" data-i18n="beT4">DC 150 kW — autoroute</option>
+ </select>
+ </div>
+ <div style="flex:1;min-width:200px;">
+ <label><span data-i18n="beUtil">Taux d'utilisation</span> — <span class="val" id="beUtilVal">8%</span></label>
+ <input type="range" id="beUtil" min="1" max="25" value="8">
+ </div>
+ <div style="flex:1;min-width:200px;">
+ <label><span data-i18n="beMargin">Marge énergie</span> — <span class="val" id="beMarginVal">12 c€/kWh</span></label>
+ <input type="range" id="beMargin" min="2" max="30" value="12">
+ </div>
+ </div>
+ <div class="kpi-row" style="margin-top:12px;">
+ <div class="kpi"><div class="n" id="beCapex">—</div><div class="l" data-i18n="beCapexL">CAPEX (investissement)</div></div>
+ <div class="kpi"><div class="n" id="beKwh">—</div><div class="l" data-i18n="beKwhL">Énergie vendue / an</div></div>
+ <div class="kpi"><div class="n" id="beProfit">—</div><div class="l" data-i18n="beProfitL">Profit / an</div></div>
+ <div class="kpi"><div class="n" id="bePayback">—</div><div class="l" data-i18n="bePaybackL">Point mort</div></div>
+ </div>
+ <div class="note" data-i18n="beNote">CAPEX = borne + installation + raccordement réseau ; OPEX = maintenance + loyer + abonnement réseau. Points morts typiques : CA 7–22 kW ≈ 2–4 ans à 8–10 % d'utilisation ; DC rapide ≈ 4–6 ans et dépend fortement du trafic.</div>
+ </div>
+ <div class="card" style="margin-top:16px;">
+ <h3 data-i18n="marketTitle">Qui fait quoi ? Qui paie ? Où acheter ?</h3>
+ <div id="marketBlock">
+ <table>
+ <thead><tr><th data-i18n="mkActor">Acteur</th><th data-i18n="mkDoes">Qui fait la prestation</th><th data-i18n="mkPays">Qui paie</th><th data-i18n="mkBuy">Où acheter / s'associer</th></tr></thead>
+ <tbody>
+ <tr><td><b>Infrastructure Developer</b><br><span style="color:var(--muted);font-size:12px;">Ionity, Fastned, ChargePoint, TotalEnergies</span></td>
+ <td>Installe et exploite les bornes (autoroutes, parkings, copropriétés)</td>
+ <td>Le conducteur au kWh (prix à la borne) ; copropriétés via abonnement</td>
+ <td>Bornes auprès des fabricants (ABB, Alpitronic, Schneider, Wallbox) ; terrains via bailleurs et centres commerciaux</td></tr>
+ <tr><td><b>Charging Service Provider</b><br><span style="color:var(--muted);font-size:12px;">Elli (VW), Electra, Shell Recharge, Evgo</span></td>
+ <td>Vend le service de recharge (carte/app, facturation, roaming OCPI)</td>
+ <td>Le conducteur (abonnement + kWh) ; les flottes d'entreprise (contrat B2B)</td>
+ <td>Énergie auprès des fournisseurs d'électricité ; logiciel eMSP (Nuvo, Driivz) ; erruption du roaming via hubs (Hubject, Gireve)</td></tr>
+ <tr><td><b>Load Orchestrator</b><br><span style="color:var(--muted);font-size:12px;">Nuvve, Fermata Energy, Jedlix, Next Kraftwerke</span></td>
+ <td>Pilote les recharges/décharges (V1G/V2G), agrège la flexibilité</td>
+ <td>Le <b>gestionnaire de réseau</b> (services système, capacité) ; le fournisseur d'énergie (arbitrage prix) ; rémunère le propriétaire du VE</td>
+ <td>Accès aux marchés de l'électricité via un agriteur ; plateformes V2G ; bornes bidirectionnelles certifiées (CHAdeMO / ISO 15118-20)</td></tr>
+ <tr><td><b>Mobility Provider (MaaS)</b><br><span style="color:var(--muted);font-size:12px;">Whim, Uber, opérateurs de flottes, Zity</span></td>
+ <td>Vend la mobilité comme service (abonnement multimodal, autopartage)</td>
+ <td>L'usager (abonnement mensuel, pay-per-use) ; collectivités (subventions mobilité)</td>
+ <td>Véhicules auprès des constructeurs ; recharge via accords CSP ; API MaaS (Jelbi, Ubitricity)</td></tr>
+ </tbody>
+ </table>
+ <div class="note"><b>Cas d'école (Partie 4)</b> : Volkswagen a fondé <b>Elli</b> en 2018 (marque énergie &amp; recharge du groupe) et pilote la flexibilité via <b>Elli Flex</b> ; Shell a racheté NewMotion (2017) et Greenlots (2019) ; BP a racheté Chargemaster (2018) ; GM s'est associé à Bechtel pour son réseau — soit exactement les combinaisons d'empilement de valeur du Tableau 5.1 du livre blanc Guidehouse.</div>
+ </div><!-- /marketBlock -->
+ </div>
+ </section>
+
+ <!-- ============ TAB 2 : SESSION EN DIRECT ============ -->
+ <section id="tab-session" class="tab">
+ <div class="kpi-row">
+ <div class="kpi"><div class="n" id="sessSoc">—</div><div class="l" data-i18n="kSoc">Niveau de batterie</div></div>
+ <div class="kpi"><div class="n" id="sessPower">—</div><div class="l" data-i18n="kPower">Puissance (kW)</div></div>
+ <div class="kpi"><div class="n" id="sessPrice">—</div><div class="l" data-i18n="kPrice">Prix €/kWh actuel</div></div>
+ <div class="kpi"><div class="n" id="sessSpent">—</div><div class="l" data-i18n="kPaid">Payé (€)</div></div>
+ <div class="kpi"><div class="n" id="sessEarned" style="color:var(--good)">—</div><div class="l" data-i18n="kEarned">Gains V2G (€)</div></div>
+ </div>
+ <div class="grid2">
+ <div class="card">
+ <h3 data-i18n="sessTitle">Session</h3>
+ <div style="text-align:center">
+ <canvas id="gauge" width="260" height="160" style="max-width:260px;margin:0 auto;"></canvas>
+ </div>
+ <div style="text-align:center;margin:8px 0;">
+ <span class="modechip mode-idle" id="sessMode">en attente</span>
+ <div class="note" id="sessInfo" data-i18n-dyn="sessInfoDef">Aucune session active — lancez l'optimiseur dans l'onglet 1 puis « Démarrer la session en direct ».</div>
+ </div>
+ </div>
+ <div class="card">
+ <h3 data-i18n="flowTitle">Flux d'énergie</h3>
+ <div class="flow">
+ <div class="node" data-i18n="nGrid">Réseau</div><div class="arrow" id="arr1">⇄</div>
+ <div class="node" data-i18n="nCharger">Borne</div><div class="arrow" id="arr2">⇄</div>
+ <div class="node" data-i18n="nBattery">Batterie VE</div><div class="arrow" id="arr3">⇄</div>
+ <div class="node" data-i18n="nBuilding">Bâtiment</div>
+ </div>
+ <div class="note" id="flowNote" data-i18n="flowNote">Quand le prix est élevé, la voiture <b>se décharge</b> (V2G — le véhicule devient une centrale) ; quand le prix est bas, elle <b>se recharge</b> (le véhicule devient une charge).</div>
+ <h3 style="margin-top:18px;" data-i18n="simTitle">Commandes de simulation</h3>
+ <button class="btn secondary" id="btnPlay" data-i18n="btnPlay">▶ Lecture auto</button>
+ <button class="btn secondary" id="btnStep" data-i18n="btnStep">Avancer de 10 min</button>
+ <button class="btn secondary" id="btnReset" data-i18n="btnReset">Nouvelle session</button>
+ </div>
+ </div>
+ <div class="card" style="margin-top:16px;">
+ <h3 data-i18n="sessRegTitle">Sessions actives sur la plateforme</h3>
+ <table id="sessTable">
+ <thead><tr><th>ID</th><th data-i18n="thVehicle">Véhicule</th><th data-i18n="thStation">Borne</th><th data-i18n="thMode">Mode</th>
+ <th class="num">SoC (%)</th><th class="num" data-i18n="thProg">Progression</th><th data-i18n="thStatus">Statut</th></tr></thead>
+ <tbody></tbody>
+ </table>
+ </div>
+ <div class="card" style="margin-top:16px;">
+ <h3 data-i18n="logTitle">Journal de télémétrie de la session</h3>
+ <table id="logTable"><thead><tr><th data-i18n="thTime">Temps (h)</th><th data-i18n="thHour">Heure</th><th data-i18n="thPower" class="num">Puissance (kW)</th><th data-i18n="thMode">Mode</th><th data-i18n="thPrice" class="num">Prix (€/kWh)</th><th data-i18n="thSoc" class="num">SoC (%)</th></tr></thead><tbody></tbody></table>
+ </div>
+ </section>
+
+
+ <!-- ============ TAB 4 : ANALYSE RÉSEAU ============ -->
+ <section id="tab-grid" class="tab">
+ <div class="kpi-row">
+ <div class="kpi"><div class="n" id="kDumb">—</div><div class="l" data-i18n="kPeakDumb">Pic recharge non pilotée</div></div>
+ <div class="kpi"><div class="n" id="kSmart">—</div><div class="l" data-i18n="kPeakSmart">Pic orchestré</div></div>
+ <div class="kpi"><div class="n" id="kRed" style="color:var(--good)">—</div><div class="l" data-i18n="kReduction">Réduction du pic</div></div>
+ <div class="kpi"><div class="n" id="kV2G">—</div><div class="l" data-i18n="kV2GCap">Puissance de décharge V2G</div></div>
+ </div>
+ <div class="grid2">
+ <div class="card">
+ <h3 data-i18n="orchTitle">Paramètres d'orchestration</h3>
+ <label data-i18n="gFleet">Taille de la flotte</label><input type="number" id="gFleet" value="1000" min="1">
+ <label data-i18n="gShare">Part V2G (%)</label><input type="number" id="gShare" value="40" min="0" max="100">
+ <button class="btn" id="btnGrid" style="width:100%;text-align:center;" data-i18n="btnGrid">Simuler l'orchestration</button>
+ <div class="note" data-i18n="gridNote">Comme le décrit <i>Charging Ahead with EV Analytics</i> (SAS/Intel), le VE est une <b>charge</b> en recharge, un <b>stockage</b> à l'arrêt et une <b>source d'alimentation</b> en décharge. L'orchestrateur décale la recharge dans la vallée de prix (01h–07h) et décharge la flotte V2G sur le pic du soir (18h–20h) — aplatissement de la courbe que le gestionnaire de réseau devrait sinon renforcer.</div>
+ </div>
+ <div class="card"><h3 data-i18n="gridChartTitle">Profil de charge de la flotte sur 24 h — non piloté vs orchestré</h3><canvas id="gridChart" width="880" height="360"></canvas>
+ <div class="legend">
+ <span><span class="dot" style="background:#f87171"></span><span data-i18n="gridLeg1">Recharge non pilotée</span></span>
+ <span><span class="dot" style="background:#2dd4bf"></span><span data-i18n="gridLeg2">Orchestration intelligente + V2G</span></span>
+ <span><span class="dot" style="background:#7c8cf8"></span><span data-i18n="gridLeg3">Prix spot €/kWh (courbe)</span></span>
+ </div>
+ </div>
+ </div>
+ </section>
+
+ <!-- ============ TAB 5 : FLOTTE MOBILE ============ -->
+ <section id="tab-fleet" class="tab">
+ <div class="kpi-row">
+ <div class="kpi"><div class="n" id="fHour" style="font-size:18px">—</div><div class="l" data-i18n="fHourL">Heure simulée</div></div>
+ <div class="kpi"><div class="n" id="fCharging" style="color:var(--acc)">—</div><div class="l" data-i18n="fChargingL">En charge</div></div>
+ <div class="kpi"><div class="n" id="fV2G" style="color:var(--bad)">—</div><div class="l" data-i18n="fV2GL">Décharge V2G</div></div>
+ <div class="kpi"><div class="n" id="fDriving" style="color:var(--warn)">—</div><div class="l" data-i18n="fDrivingL">En déplacement</div></div>
+ <div class="kpi"><div class="n" id="fUnknown">—</div><div class="l" data-i18n="fUnknownL">Invisibles pour le réseau</div></div>
+ </div>
+ <div class="grid2">
+ <div class="card">
+ <h3 data-i18n="fleetTitle">La complexité de la charge mobile</h3>
+ <canvas id="fleetMap" width="620" height="430"></canvas>
+ <div class="legend">
+ <span><span class="dot" style="background:#f59e0b"></span><span data-i18n="fLeg1">En déplacement</span></span>
+ <span><span class="dot" style="background:#2dd4bf"></span><span data-i18n="fLeg2">En charge</span></span>
+ <span><span class="dot" style="background:#f87171"></span><span data-i18n="fLeg3">Décharge V2G</span></span>
+ <span><span class="dot" style="background:#55627f"></span><span data-i18n="fLeg4">Garée (débranchée)</span></span>
+ </div>
+ </div>
+ <div class="card">
+ <h3 data-i18n="fleetCtrl">Commandes</h3>
+ <label><span data-i18n="fHourValL">Heure simulée</span> — <span class="val" id="fHourVal">18h00</span></label>
+ <input type="range" id="fSlider" min="0" max="23.9" step="0.1" value="18">
+ <button class="btn secondary" id="btnFleetPlay" data-i18n="btnFleetPlay">▶ Lancer la journée</button>
+ <button class="btn secondary" id="btnFleetReset" data-i18n="btnFleetReset">Réinitialiser</button>
+ <div class="note" data-i18n="fleetNote">
+ Chaque point est un véhicule de la flotte (60 VE). Comme le souligne <i>Charging Ahead with EV Analytics</i> (SAS/Intel) :
+ les VE <b>bougent</b> — le réseau n'a donc jamais une visibilité complète de leur position.
+ Le matin ils roulent vers le travail (charge de journée possible 12h–14h), le soir activités puis retour
+ à domicile ; la recharge a lieu la nuit (vallée de prix) et les VE compatibles <b>déchargent sur le pic 18h–21h</b>.
+ C'est cette mobilité qui rend l'orchestration T2G difficile — et c'est le problème que la plateforme résout.
+ </div>
+ <div class="note" id="fInsight" style="color:var(--acc)"></div>
+ </div>
+ </div>
+ </section>
+
+ <!-- ============ TAB 6 : RETOURS D'EXPÉRIENCE ============ -->
+ <section id="tab-exp" class="tab">
+ <div class="card">
+ <h3 data-i18n="expTitle">Retours d'expérience par pays</h3>
+ <canvas id="expChart" width="880" height="240"></canvas>
+ <table id="expTable" style="margin-top:14px;">
+ <thead><tr><th data-i18n="thCountry">Pays</th><th class="num" data-i18n="thShare">Part VE (ventes)</th>
+ <th data-i18n="thV2G">Statut V2G / recharge pilotée</th><th data-i18n="thActors">Acteurs clés</th>
+ <th data-i18n="thPolicy">Politique & incitations</th></tr></thead>
+ <tbody></tbody>
+ </table>
+ <div class="note" data-i18n="expNote">Chiffres illustratifs 2023–2024 pour discussion académique — parts VE des immatriculations neuves ; statut V2G tel que rapporté publiquement.</div>
+ </div>
+ </section>
+
+</main>
+<div class="footer-note" data-i18n="footer">Prototype VoltHub T2G — données simulées pour démonstration académique · d'après le livre blanc Guidehouse T2G, EV Analytics (SAS/Intel) et Mobility Services (Navigant)</div>
+
+
+<script>
+/* ================= state & helpers ================= */
+let META = null; // {stations, vehicles, destinations, spot_prices}
+let LAST_OPT = null; // last optimizer response
+let selectedIdx = 0; // selected option index
+let SESSION = null; // {id, station, vehicle}
+let playing = false, playTimer = null;
+
+const $ = id => document.getElementById(id);
+const eur = v => (v < 0 ? "−" : "") + Math.abs(v).toFixed(2) + " €";
+
+function api(path, body) {
+ return fetch(path, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)}
+ : {}).then(r => r.json());
+}
+
+/* tabs */
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+ document.querySelectorAll("nav button").forEach(x => x.classList.remove("active"));
+ document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+ b.classList.add("active");
+ $("tab-" + b.dataset.tab).classList.add("active");
+ if (b.dataset.tab === "stack") { loadStack(); loadBreakEven(); }
+ if (b.dataset.tab === "grid") loadGrid();
+ if (b.dataset.tab === "exp") loadExp();
+ if (b.dataset.tab === "fleet") fleetRender();
+ if (b.dataset.tab === "plan") { drawMap(); if (LAST_OPT && LAST_OPT.options.length) drawPlanChart(); }
+});
+
+/* ================= canvas helpers ================= */
+function prep(cv) {
+ const dpr = window.devicePixelRatio || 1;
+ const w = cv.clientWidth || cv.width, h = cv.clientHeight || cv.height;
+ cv.width = w * dpr; cv.height = h * dpr;
+ const ctx = cv.getContext("2d"); ctx.scale(dpr, dpr);
+ return {ctx, w, h};
+}
+
+/* ================= city map ================= */
+function drawMap() {
+ if (!META) return;
+ const cv = $("map"), {ctx, w, h} = prep(cv);
+ const pad = 40;
+ ctx.clearRect(0, 0, w, h);
+ const X = x => pad + x / 20 * (w - 2 * pad);
+ const Y = y => h - pad - y / 20 * (h - 2 * pad);
+
+ /* grid streets */
+ ctx.strokeStyle = "#1a2540"; ctx.lineWidth = 1;
+ for (let i = 0; i <= 20; i += 2) {
+ ctx.beginPath(); ctx.moveTo(X(i), Y(0)); ctx.lineTo(X(i), Y(20)); ctx.stroke();
+ ctx.beginPath(); ctx.moveTo(X(0), Y(i)); ctx.lineTo(X(20), Y(i)); ctx.stroke();
+ }
+ ctx.fillStyle = "#8294b5"; ctx.font = "10px sans-serif";
+ ctx.fillText("km 0", pad - 22, h - pad + 14); ctx.fillText("20", w - pad - 6, h - pad + 14);
+
+ const rec = LAST_OPT && LAST_OPT.recommendation ? LAST_OPT.recommendation.station : null;
+ const dest = LAST_OPT ? LAST_OPT.destination : null;
+
+ /* route line destination -> recommended station */
+ if (rec && dest) {
+ ctx.strokeStyle = "#2dd4bf"; ctx.setLineDash([6, 5]); ctx.lineWidth = 2;
+ ctx.beginPath(); ctx.moveTo(X(dest.x), Y(dest.y)); ctx.lineTo(X(rec.x), Y(rec.y)); ctx.stroke();
+ ctx.setLineDash([]);
+ }
+
+ /* stations */
+ for (const st of META.stations) {
+ const x = X(st.x), y = Y(st.y);
+ const occ = LIVE ? LIVE.stations.find(o => o.id === st.id) : null;
+ const r = st.kw >= 100 ? 9 : st.kw >= 50 ? 7.5 : 6;
+ ctx.beginPath(); ctx.arc(x, y, r, 0, 7);
+ ctx.fillStyle = st.type === "DC" ? "#f59e0b" : "#7c8cf8";
+ ctx.fill();
+ if (st.v2g) { ctx.strokeStyle = "#2dd4bf"; ctx.lineWidth = 2.5; ctx.stroke(); }
+ if (rec && st.id === rec.id) {
+ ctx.beginPath(); ctx.arc(x, y, r + 5, 0, 7);
+ ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2; ctx.stroke();
+ }
+ if (occ) { // live occupancy ring: green = free slots, red = full
+ ctx.beginPath(); ctx.arc(x, y, r + 2.5, 0, 7);
+ ctx.strokeStyle = occ.free > 0 ? "#34d399" : "#f87171";
+ ctx.lineWidth = 2; ctx.stroke();
+ }
+ ctx.fillStyle = "#dbe4f5"; ctx.font = "11px sans-serif";
+ ctx.fillText(st.name, x + r + 4, y + 4);
+ ctx.fillStyle = "#8294b5"; ctx.font = "10px sans-serif";
+ let line2 = st.kw + " kW" + (st.v2g ? " · V2G" : "");
+ if (occ) line2 += " · " + (occ.free === 0 ? t("dFull") : fmt(t("freeSlots"), {f: occ.free, s: occ.slots}));
+ ctx.fillText(line2, x + r + 4, y + 16);
+ }
+
+ /* destination */
+ if (dest) {
+ ctx.fillStyle = "#f87171";
+ ctx.beginPath(); ctx.arc(X(dest.x), Y(dest.y), 8, 0, 7); ctx.fill();
+ ctx.fillStyle = "#dbe4f5"; ctx.font = "bold 11px sans-serif";
+ ctx.fillText(dest.name, X(dest.x) + 12, Y(dest.y) - 8);
+ }
+}
+</script>
+<script>
+/* ================= optimizer UI ================= */
+function params() {
+ return {
+ vehicle: $("vehicle").value, soc: +$("soc").value, target: +$("target").value,
+ destination: $("destination").value, window: +$("window").value,
+ start_hour: +$("startHour").value, v2g: $("v2g").checked, deg: $("deg").checked
+ };
+}
+
+async function optimize() {
+ $("btnOptimize").disabled = true;
+ LAST_OPT = await api("/api/optimize", params());
+ $("btnOptimize").disabled = false;
+ selectedIdx = 0;
+ renderOptions();
+ drawMap();
+}
+
+function renderOptions() {
+ const box = $("options");
+ if (!LAST_OPT || !LAST_OPT.options.length) {
+ box.innerHTML = '<div class="note">' + t("dNoStation") + "</div>";
+ return;
+ }
+ box.innerHTML = "";
+ LAST_OPT.options.slice(0, 6).forEach((o, i) => {
+ const st = o.station;
+ const div = document.createElement("div");
+ div.className = "opt" + (i === selectedIdx ? " best" : "");
+ div.innerHTML =
+ `<div class="name">${i === 0 ? "★ " : ""}${st.name}
+ <span class="badge ${st.type === "DC" ? "dc" : "ac"}">${st.type} ${st.kw} kW</span>
+ ${o.v2g ? '<span class="badge v2g">V2G</span>' : ""}
+ <span class="cost ${o.net_cost < 0 ? "neg" : ""}">${eur(o.net_cost)}</span></div>
+ <div class="row">
+ <span>${fmt(t("dDetour"), {km: o.distance_km})}</span>
+ <span>${fmt(t("dDuration"), {h: o.duration_h})}</span>
+ <span>${fmt(t("dBought"), {b: o.kwh_bought})}${o.kwh_sold ? fmt(t("dSold"), {s: o.kwh_sold}) : ""}</span>
+ <span>${fmt(t("dCo2"), {c: o.co2_g, p: o.co2_saved_pct})}</span>
+ ${o.modulated ? "<span>" + fmt(t("dMod"), {p: o.peak_kw}) + "</span>" : ""}
+ ${o.degradation_cost > 0 ? "<span>" + fmt(t("dDeg"), {d: o.degradation_cost}) + "</span>" : ""}
+ <span>${fmt(t("dSaved"), {p: o.saving_pct})}</span>
+ </div>`;
+ div.onclick = () => { selectedIdx = i; renderOptions(); drawPlanChart(); };
+ box.appendChild(div);
+ });
+ drawPlanChart();
+}
+</script>
+
+<script>
+/* ================= live session ================= */
+async function startSession() {
+ const p = params();
+ const res = await api("/api/session/start", p);
+ if (res.error) { alert(res.error); return; }
+ SESSION = res;
+ $("logTable").querySelector("tbody").innerHTML = "";
+ $("sessInfo").textContent = fmt(t("dPlugged"), {st: res.station.name, v: res.vehicle.name});
+ document.querySelector('nav button[data-tab="session"]').click();
+ stepSession();
+}
+
+async function stepSession() {
+ if (!SESSION) return;
+ const st = await api("/api/session/step", {session_id: SESSION.id});
+ if (st.error) return;
+ renderSession(st);
+}
+
+function renderSession(st) {
+ $("sessSoc").textContent = pct(st.soc_pct);
+ $("sessPower").textContent = st.power_kw.toFixed(1);
+ $("sessPrice").textContent = st.price.toFixed(3);
+ $("sessSpent").textContent = eur(st.spent);
+ $("sessEarned").textContent = eur(st.earned);
+ const chip = $("sessMode");
+ chip.className = "modechip mode-" + st.mode;
+ chip.textContent = st.mode === "charging" ? t("dModeCharging") :
+ st.mode === "v2g_discharge" ? t("dModeV2G") : t("dModeIdle");
+ $("arr2").className = "arrow" + (st.mode === "charging" ? " live" : st.mode === "v2g_discharge" ? " live rev" : "");
+ drawGauge(st.soc_pct);
+ const tb = $("logTable").querySelector("tbody");
+ if (st.log && st.log.length) {
+ const e = st.log[st.log.length - 1];
+ const row = document.createElement("tr");
+ row.innerHTML = `<td>${e.t}</td><td>${st.hour}:00</td><td class="num">${e.kw.toFixed(1)}</td>
+ <td>${e.mode}</td><td class="num">${e.price.toFixed(3)}</td><td class="num">${e.soc.toFixed(1)}</td>`;
+ tb.appendChild(row);
+ }
+ if (st.done && playing) togglePlay();
+ if (st.done) $("sessInfo").textContent = fmt(t("dDone"), {s: pct(st.soc_pct), c: eur(st.spent - st.earned)});
+}
+
+function drawGauge(soc) {
+ const cv = $("gauge"), {ctx, w, h} = prep(cv);
+ ctx.clearRect(0, 0, w, h);
+ const cx = w / 2, cy = h * 0.82, r = Math.min(w / 2 - 14, h - 30);
+ ctx.lineWidth = 16; ctx.lineCap = "round";
+ ctx.strokeStyle = "#1a2540";
+ ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI); ctx.stroke();
+ const col = soc > 50 ? "#2dd4bf" : soc > 25 ? "#f59e0b" : "#f87171";
+ ctx.strokeStyle = col;
+ ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, Math.PI * (1 + soc / 100)); ctx.stroke();
+ ctx.fillStyle = "#dbe4f5"; ctx.font = "bold 30px sans-serif"; ctx.textAlign = "center";
+ ctx.fillText(soc.toFixed(0) + "%", cx, cy - 8);
+ ctx.font = "11px sans-serif"; ctx.fillStyle = "#8294b5";
+ ctx.fillText(t("dSocLabel"), cx, cy + 12);
+}
+
+function togglePlay() {
+ playing = !playing;
+ $("btnPlay").textContent = playing ? "Pause" : t("btnPlay");
+ if (playing) playTimer = setInterval(stepSession, 450);
+ else clearInterval(playTimer);
+}
+</script>
+<script>
+/* ================= plan chart ================= */
+function drawPlanChart() {
+ const cv = $("planChart");
+ if (!LAST_OPT || !LAST_OPT.options.length) { $("planWrap").style.display = "none"; $("planLegend").style.display = "none"; return; }
+ $("planWrap").style.display = "block"; $("planLegend").style.display = "flex";
+ const tl = LAST_OPT.options[selectedIdx].timeline;
+ const {ctx, w, h} = prep(cv);
+ ctx.clearRect(0, 0, w, h);
+ const padL = 38, padB = 26, padT = 14;
+ const cw = w - padL - 12, ch = h - padB - padT;
+ const maxKW = Math.max(10, ...tl.map(t => Math.max(t.charge_kw, t.discharge_kw)));
+ const maxP = 0.45;
+ const bw = cw / tl.length;
+ const yKW = v => padT + ch - (v / maxKW) * ch;
+ const yP = v => padT + ch - (v / maxP) * ch;
+ ctx.strokeStyle = "#26314d";
+ ctx.beginPath(); ctx.moveTo(padL, yKW(0)); ctx.lineTo(w - 12, yKW(0)); ctx.stroke();
+ tl.forEach((t, i) => {
+ const x = padL + i * bw;
+ if (t.charge_kw > 0) {
+ ctx.fillStyle = "#2dd4bf";
+ ctx.fillRect(x + 2, yKW(t.charge_kw), bw - 4, yKW(0) - yKW(t.charge_kw));
+ }
+ if (t.discharge_kw > 0) {
+ ctx.fillStyle = "#f87171";
+ ctx.fillRect(x + 2, yKW(0), bw - 4, yKW(t.discharge_kw) - yKW(0));
+ }
+ ctx.fillStyle = "#8294b5"; ctx.font = "10px sans-serif"; ctx.textAlign = "center";
+ ctx.fillText(t.h + "h", x + bw / 2, h - 10);
+ });
+ ctx.textAlign = "left";
+ ctx.fillStyle = "#2dd4bf"; ctx.fillText("kW", 4, padT + 8);
+ ctx.fillStyle = "#7c8cf8"; ctx.fillText("€/kWh", 4, padT + 20);
+ ctx.strokeStyle = "#7c8cf8"; ctx.lineWidth = 2; ctx.beginPath();
+ tl.forEach((t, i) => {
+ const x = padL + i * bw + bw / 2, y = yP(t.price);
+ i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+ });
+ ctx.stroke();
+}
+</script>
+<script>
+/* ================= value stacking + grid analytics ================= */
+async function loadStack() {
+ const d = {fleet: +$("fleet").value, v2g_share: +$("v2gShare").value, kwh_day: +$("kwhDay").value};
+ const r = await api("/api/valuestack", d);
+ $("vsTotal").textContent = r.total.toLocaleString() + " €";
+ $("vsPerVeh").textContent = r.per_vehicle_year.toLocaleString() + " €";
+ $("vsBonus").textContent = "+" + r.stacking_bonus_pct + "%";
+ const cols = ["#7c8cf8", "#2dd4bf", "#f59e0b", "#f87171"];
+ const {ctx, w, h} = prep($("stackChart"));
+ ctx.clearRect(0, 0, w, h);
+ const padL = 70, padB = 90, padT = 16;
+ const cw = w - padL - 16, ch = h - padB - padT;
+ const max = Math.max(...r.models.map(m => m.revenue)) * 1.15;
+ const bw = cw / r.models.length;
+ r.models.forEach((m, i) => {
+ const bh = (m.revenue / max) * ch;
+ const x = padL + i * bw + bw * 0.2;
+ ctx.fillStyle = cols[i];
+ ctx.fillRect(x, padT + ch - bh, bw * 0.6, bh);
+ ctx.fillStyle = "#dbe4f5"; ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center";
+ ctx.fillText(Math.round(m.revenue).toLocaleString(), x + bw * 0.3, padT + ch - bh - 6);
+ ctx.fillStyle = "#8294b5"; ctx.font = "11px sans-serif";
+ m.model.split(" ").forEach((wd, j) => ctx.fillText(wd, x + bw * 0.3, padT + ch + 16 + j * 13));
+ });
+ ctx.textAlign = "left";
+ ctx.fillStyle = "#8294b5"; ctx.font = "10px sans-serif";
+ ctx.fillText(t("dAxisYear"), 8, padT + 2);
+ const MODEL_I18N = {
+ "Infrastructure Developer": {fr: "2 c€/kWh de frais d'utilisation des bornes", en: "2 c€/kWh utilisation fee on charging points"},
+ "Charging Service Provider": {fr: "Marge énergie de 8 c€/kWh + frais de session", en: "8 c€/kWh energy margin + session fees"},
+ "Load Orchestrator": {fr: "Arbitrage V2G (spread de 20 c€/kWh) + capacité 15 €/kW-an", en: "V2G arbitrage (20 c€/kWh spread) + 15 €/kW-yr capacity"},
+ "Mobility Provider (MaaS)": {fr: "Abonnement 12 €/mois, marge 30 %, attachement 35 %", en: "12 €/mo subscription, 30% margin, 35% attach rate"}
+ };
+ $("stackTable").querySelector("tbody").innerHTML = r.models.map((m, i) => {
+ const det = (MODEL_I18N[m.model] || {})[LANG] || m.detail;
+ return `<tr><td><span class="dot" style="background:${cols[i]}"></span>${m.model}</td>
+ <td class="num">${m.revenue.toLocaleString()}</td><td>${det}</td></tr>`;
+ }).join("");
+}
+
+async function loadGrid() {
+ const d = {fleet: +$("gFleet").value, v2g_share: +$("gShare").value};
+ const r = await api("/api/grid", d);
+ $("kDumb").textContent = r.kpi.peak_dumb_kw.toLocaleString() + " kW";
+ $("kSmart").textContent = r.kpi.peak_smart_kw.toLocaleString() + " kW";
+ $("kRed").textContent = "−" + r.kpi.peak_reduction_pct + "%";
+ $("kV2G").textContent = r.kpi.v2g_discharge_kw.toLocaleString() + " kW";
+ const {ctx, w, h} = prep($("gridChart"));
+ ctx.clearRect(0, 0, w, h);
+ const padL = 64, padB = 30, padT = 16;
+ const cw = w - padL - 16, ch = h - padB - padT;
+ const all = r.dumb_kw.concat(r.smart_kw.map(Math.abs));
+ const max = Math.max(...all) * 1.12;
+ const bw = cw / 24;
+ const y = v => padT + ch - (v / max) * ch;
+ ctx.strokeStyle = "#26314d";
+ ctx.beginPath(); ctx.moveTo(padL, y(0)); ctx.lineTo(w - 16, y(0)); ctx.stroke();
+ r.dumb_kw.forEach((v, i) => {
+ ctx.fillStyle = "#f8717155";
+ ctx.fillRect(padL + i * bw + 1, y(v), bw - 2, y(0) - y(v));
+ });
+ ctx.strokeStyle = "#2dd4bf"; ctx.lineWidth = 2.5; ctx.beginPath();
+ r.smart_kw.forEach((v, i) => {
+ const x = padL + i * bw + bw / 2;
+ i ? ctx.lineTo(x, y(v)) : ctx.moveTo(x, y(v));
+ });
+ ctx.stroke();
+ r.smart_kw.forEach((v, i) => {
+ if (v < 0) { ctx.fillStyle = "#f87171"; ctx.fillRect(padL + i * bw + 1, y(0), bw - 2, y(v) - y(0)); }
+ });
+ const maxP = 0.45;
+ ctx.strokeStyle = "#7c8cf8"; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.beginPath();
+ r.spot.forEach((p, i) => {
+ const x = padL + i * bw + bw / 2, yy = padT + ch - (p / maxP) * ch;
+ i ? ctx.lineTo(x, yy) : ctx.moveTo(x, yy);
+ });
+ ctx.stroke(); ctx.setLineDash([]);
+ ctx.fillStyle = "#8294b5"; ctx.font = "10px sans-serif"; ctx.textAlign = "center";
+ for (let i = 0; i < 24; i += 3) ctx.fillText(i + "h", padL + i * bw + bw / 2, h - 12);
+ ctx.textAlign = "left";
+ ctx.fillText("kW", 8, padT + 2);
+}
+</script>
+<script>
+/* ================= i18n FR / EN ================= */
+let LANG = "fr";
+try { LANG = localStorage.getItem("t2g_lang") || "fr"; } catch (e) {}
+
+/* English strings; French is auto-captured from the DOM at parse time */
+const I18N = {
+ sub: {en: "Transportation-to-Grid platform — smart charging · V2G · value stacking<br>Prototype — Proj5"},
+ reqTitle: {en: "Driver request"},
+ vehicle: {en: "Vehicle"},
+ battery: {en: "Current battery"},
+ target: {en: "Target SoC"},
+ destination:{en: "Destination"},
+ window: {en: "Parking window (hours)"},
+ startHour: {en: "Arrival hour (0–23)"},
+ v2gAllow: {en: "Allow V2G (bidirectional)"},
+ btnOptimize:{en: "Optimize charging plan"},
+ optNote: {en: "The engine ranks every station by <b>net cost + time + detour</b>, schedules charging in the cheapest price slots and — when V2G is enabled — <b>sells energy back to the grid during the evening peak</b>."},
+ mapTitle: {en: "City map — charging network"},
+ mapLeg1: {en: "DC fast (50–150 kW)"},
+ mapLeg2: {en: "AC (7–22 kW)"},
+ mapLeg3: {en: " V2G-capable"},
+ mapLeg4: {en: "Destination"},
+ mapLeg5: {en: "Recommended"},
+ optTitle: {en: "Ranked options — places · time · duration · cost"},
+ planLeg1: {en: "Charging (kW)"},
+ planLeg2: {en: "V2G discharge (kW)"},
+ planLeg3: {en: "Price €/kWh (line)"},
+ kSoc: {en: "Battery SoC"},
+ kPower: {en: "Power (kW)"},
+ kPrice: {en: "Current price €/kWh"},
+ kPaid: {en: "Paid (€)"},
+ kEarned: {en: "V2G earnings (€)"},
+ sessTitle: {en: "Session"},
+ flowTitle: {en: "Energy flow"},
+ nGrid: {en: "Grid"},
+ nCharger: {en: "Charger"},
+ nBattery: {en: "EV battery"},
+ nBuilding: {en: "Building"},
+ flowNote: {en: "When prices are high the car <b>discharges</b> (V2G — the vehicle becomes a power plant); when prices are low it <b>charges</b> (the vehicle becomes a load)."},
+ simTitle: {en: "Simulation controls"},
+ btnPlay: {en: "▶ Auto-play"},
+ btnStep: {en: "Step 10 min"},
+ btnReset: {en: "New session"},
+ logTitle: {en: "Session telemetry log"},
+ thTime: {en: "Time (h)"},
+ thHour: {en: "Hour of day"},
+ thPower: {en: "Power (kW)"},
+ thMode: {en: "Mode"},
+ thPrice: {en: "Price (€/kWh)"},
+ thSoc: {en: "SoC (%)"},
+ portTitle: {en: "Portfolio parameters"},
+ fleetSize: {en: "Fleet size (vehicles on platform)"},
+ v2gShare: {en: "V2G-capable share (%)"},
+ kwhDay: {en: "Energy per vehicle per day (kWh)"},
+ btnStack: {en: "Compute value stacking"},
+ stackNote: {en: "Follows the <b>4 T2G business models</b> of the Guidehouse white paper: Infrastructure Developer, Charging Service Provider, Load Orchestrator and Mobility Provider — and shows the <b>value-stacking bonus</b> of combining them instead of running a single model."},
+ vsTotal: {en: "Total € / year"},
+ vsPerVeh: {en: "€ / vehicle / year"},
+ vsBonus: {en: "Bonus vs charging-only"},
+ chartTitle: {en: "Annual revenue by business model"},
+ detailTitle:{en: "Breakdown"},
+ thModel: {en: "Business model (Guidehouse)"},
+ thRevenue: {en: "Revenue €/yr"},
+ thHow: {en: "How the money is made"},
+ marketTitle:{en: "Who does what? Who pays? Where to buy?"},
+ mkActor: {en: "Actor"},
+ mkDoes: {en: "Who performs the service"},
+ mkPays: {en: "Who pays"},
+ mkBuy: {en: "Where to buy / partner"},
+ kPeakDumb: {en: "Dumb-charging peak"},
+ kPeakSmart: {en: "Orchestrated peak"},
+ kReduction: {en: "Peak reduction"},
+ kV2GCap: {en: "V2G discharge capacity"},
+ orchTitle: {en: "Orchestration parameters"},
+ gFleet: {en: "Fleet size"},
+ gShare: {en: "V2G share (%)"},
+ btnGrid: {en: "Simulate orchestration"},
+ gridNote: {en: "As described in <i>Charging Ahead with EV Analytics</i> (SAS/Intel), EVs are a <b>load</b> when charging, <b>storage</b> when idle and a <b>source of supply</b> when discharging. The orchestrator shifts charging into the price valley (01h–07h) and discharges the V2G fleet into the evening peak (18h–20h) — flattening the load curve the utility would otherwise have to reinforce."},
+ gridChartTitle: {en: "24h fleet load profile — dumb vs orchestrated"},
+ gridLeg1: {en: "Dumb charging"},
+ gridLeg2: {en: "Smart + V2G orchestration"},
+ gridLeg3: {en: "Spot price €/kWh (line)"},
+ fHourL: {en: "Simulated hour"},
+ fChargingL: {en: "Charging"},
+ fV2GL: {en: "V2G discharge"},
+ fDrivingL: {en: "Driving"},
+ fUnknownL: {en: "Invisible to the grid"},
+ fleetTitle: {en: "The complexity of mobile charging"},
+ fLeg1: {en: "Driving"},
+ fLeg2: {en: "Charging"},
+ fLeg3: {en: "V2G discharge"},
+ fLeg4: {en: "Parked (unplugged)"},
+ fleetCtrl: {en: "Controls"},
+ fHourValL: {en: "Simulated time"},
+ btnFleetPlay: {en: "▶ Play the day"},
+ btnFleetReset:{en: "Reset"},
+ fleetNote: {en: "Each dot is one fleet vehicle (60 EVs). As highlighted in <i>Charging Ahead with EV Analytics</i> (SAS/Intel): EVs <b>move</b> — so the grid never has full visibility of their position. In the morning they drive to work (daytime top-up possible 12h–14h), evening activities, then back home; charging happens at night (price valley) and V2G-capable EVs <b>discharge into the 18h–21h peak</b>. This mobility is what makes T2G orchestration hard — and it is the problem the platform solves."},
+ footer: {en: "VoltHub T2G prototype — simulated data for academic demonstration · based on the Guidehouse T2G white paper, EV Analytics (SAS/Intel) and Mobility Services (Navigant)"},
+ sessInfoDef: {fr: "Aucune session active — lancez l'optimiseur dans l'onglet 1 puis « Démarrer la session en direct ».", en: "No active session — run the optimizer in tab 1 then “Start live session”."},
+ degAllow: {en: "Include V2G battery wear (≈ €0.07/kWh cycled)"},
+ dCo2: {fr: "{c} g CO₂ (−{p}% vs non piloté)", en: "{c} g CO₂ (−{p}% vs dumb)"},
+ dDeg: {fr: "Usure batterie : {d} €", en: "Battery wear: {d} €"},
+ freeSlots: {fr: "{f}/{s} libres", en: "{f}/{s} free"},
+ dFull: {fr: "pleine", en: "full"},
+ beTitle: {en: "Charging-point profitability — break-even (CAPEX / OPEX)"},
+ beType: {en: "Charger type"},
+ beT1: {en: "AC 7 kW — home / apartment block"},
+ beT2: {en: "AC 22 kW — car park / business"},
+ beT3: {en: "DC 50 kW — urban"},
+ beT4: {en: "DC 150 kW — highway"},
+ beUtil: {en: "Utilization rate"},
+ beMargin: {en: "Energy margin"},
+ beCapexL: {en: "CAPEX (investment)"},
+ beKwhL: {en: "Energy sold / year"},
+ beProfitL: {en: "Profit / year"},
+ bePaybackL: {en: "Break-even"},
+ beNever: {fr: "jamais", en: "never"},
+ beNote: {en: "CAPEX = charger + installation + grid connection; OPEX = maintenance + rent + network fees. Typical break-evens: AC 7–22 kW ≈ 2–4 years at 8–10% utilization; DC fast ≈ 4–6 years and depends heavily on traffic."},
+ expTitle: {en: "Country feedback — T2G experience returns"},
+ thCountry: {en: "Country"},
+ thShare: {en: "EV share of new sales"},
+ thV2G: {en: "V2G / smart-charging status"},
+ thActors: {en: "Key actors"},
+ thPolicy: {en: "Policy & incentives"},
+ expNote: {en: "Illustrative 2023–2024 figures for academic discussion — EV shares of new registrations; V2G status as publicly reported."},
+ dNoStation: {fr: "Aucune borne accessible — augmentez le niveau de batterie.", en: "No reachable station — increase the battery level."},
+ optEmpty: {fr: "Réglez votre trajet puis cliquez sur <b>Optimiser le plan de recharge</b>.", en: "Set your trip then click <b>Optimize charging plan</b>."},
+ dDetour: {fr: "{km} km de détour", en: "{km} km detour"},
+ dDuration: {fr: "{h} h de recharge", en: "{h} h charging"},
+ dBought: {fr: "+{b} kWh achetés", en: "+{b} kWh bought"},
+ dSold: {fr: " / −{s} kWh revendus", en: " / −{s} kWh sold"},
+ dSaved: {fr: "vs recharge non pilotée : <b style='color:var(--good)'>{p}% d'économie</b>", en: "vs dumb charging: <b style='color:var(--good)'>{p}% saved</b>"},
+ dPlugged: {fr: "Branché à {st} — véhicule : {v}", en: "Plugged in at {st} — vehicle: {v}"},
+ dModeCharging: {fr: "EN CHARGE", en: "CHARGING"},
+ dModeV2G: {fr: "DÉCHARGE V2G", en: "V2G DISCHARGE"},
+ dModeIdle: {fr: "EN ATTENTE", en: "IDLE"},
+ dDone: {fr: "Session terminée — SoC final {s}. Coût net : {c}.", en: "Session complete — final SoC {s}. Net cost: {c}."},
+ dResetMsg: {fr: "Lancez l'optimiseur dans l'onglet 1, puis « Démarrer la session en direct ».", en: "Run the optimizer in tab 1, then click “Start live session”."},
+ dSocLabel: {fr: "niveau de charge", en: "state of charge"},
+ dStartBtn: {fr: "Démarrer la session en direct (plan recommandé)", en: "Start live session (recommended plan)"},
+ dAxisYear: {fr: "€ / an", en: "€ / year"},
+ dInsightV2G: {fr: "Pic du soir : {n} VE injectent {p} kW dans le réseau (centrale virtuelle mobile).", en: "Evening peak: {n} EVs inject {p} kW into the grid (mobile virtual power plant)."},
+ marketBlock: {},
+ tripTitle: {en: "Trip planner"},
+ tripOrigin: {en: "Departure point"},
+ tripBtn: {en: "Check if a charging stop is needed"},
+ tripDirect: {fr: "Trajet direct possible — arrivée avec {s}% de batterie.", en: "Direct trip possible — arriving with {s}% battery."},
+ tripStop: {fr: "Recharge nécessaire en cours de route — meilleures options :", en: "A charging stop is needed — best options:"},
+ tripNoStop: {fr: "Aucune borne exploitable : partez avec plus de charge.", en: "No usable station on the way: leave with more charge."},
+ dTripDetour:{fr: " détour {km} km", en: " detour {km} km"},
+ dTripCharge:{fr: " +{k} kWh (~{h} h)", en: " +{k} kWh (~{h} h)"},
+ dTripCost: {fr: "≈ {c} €", en: "≈ {c} €"},
+ dMod: {fr: "Pic réduit à {p} kW (modulé)", en: "Peak reduced to {p} kW (modulated)"},
+ sessRegTitle: {en: "Active sessions on the platform"},
+ thVehicle: {en: "Vehicle"},
+ thStation: {en: "Station"},
+ thProg: {en: "Progress"},
+ thStatus: {en: "Status"},
+ sessRegEmpty: {fr: "Aucune session active — démarrez-en une depuis l'onglet 1.", en: "No active sessions — start one from tab 1."},
+ stActive: {fr: "En cours", en: "Active"},
+ stDone: {fr: "Terminée", en: "Done"},
+ dInsightDriving: {fr: "{n} VE sont en mouvement : pour le gestionnaire de réseau, leur position ET leur charge sont inconnues.", en: "{n} EVs are on the move: for the grid operator, both their location AND state of charge are unknown."}
+};
+
+/* capture French defaults from the DOM (before any JS modifies them) */
+document.querySelectorAll("[data-i18n]").forEach(el => {
+ const k = el.dataset.i18n;
+ if (I18N[k] && !I18N[k].fr) I18N[k].fr = el.innerHTML;
+});
+
+function t(key) {
+ const e = I18N[key];
+ return e ? (e[LANG] || e.fr) : key;
+}
+function fmt(str, obj) {
+ return str.replace(/\{(\w+)\}/g, (_, k) => obj[k] !== undefined ? obj[k] : "");
+}
+
+
+I18N.marketBlock.en = `<table>
+ <thead><tr><th>Actor</th><th>Who performs the service</th><th>Who pays</th><th>Where to buy / partner</th></tr></thead>
+ <tbody>
+ <tr><td><b>Infrastructure Developer</b><br><span style="color:var(--muted);font-size:12px;">Ionity, Fastned, ChargePoint, TotalEnergies</span></td>
+ <td>Installs and operates charging points (highways, car parks, apartment blocks)</td>
+ <td>The driver, per kWh (price at the station); apartment blocks via subscription</td>
+ <td>Chargers from manufacturers (ABB, Alpitronic, Schneider, Wallbox); land via landlords and shopping malls</td></tr>
+ <tr><td><b>Charging Service Provider</b><br><span style="color:var(--muted);font-size:12px;">Elli (VW), Electra, Shell Recharge, EVgo</span></td>
+ <td>Sells the charging service (card/app, billing, OCPI roaming)</td>
+ <td>The driver (subscription + kWh); corporate fleets (B2B contract)</td>
+ <td>Energy from electricity suppliers; eMSP software (Nuvo, Driivz); roaming via hubs (Hubject, Gireve)</td></tr>
+ <tr><td><b>Load Orchestrator</b><br><span style="color:var(--muted);font-size:12px;">Nuvve, Fermata Energy, Jedlix, Next Kraftwerke</span></td>
+ <td>Orchestrates charging/discharging (V1G/V2G), aggregates flexibility</td>
+ <td>The <b>grid operator</b> (system services, capacity); the energy supplier (price arbitrage); pays the EV owner</td>
+ <td>Electricity market access via an aggregator; V2G platforms; certified bidirectional chargers (CHAdeMO / ISO 15118-20)</td></tr>
+ <tr><td><b>Mobility Provider (MaaS)</b><br><span style="color:var(--muted);font-size:12px;">Whim, Uber, fleet operators, Zity</span></td>
+ <td>Sells mobility as a service (multimodal subscription, car sharing)</td>
+ <td>The user (monthly subscription, pay-per-use); municipalities (mobility subsidies)</td>
+ <td>Vehicles from OEMs; charging via CSP agreements; MaaS APIs (Jelbi, Ubitricity)</td></tr>
+ </tbody>
+ </table>
+ <div class="note"><b>Case studies (Part 4)</b>: Volkswagen <b>founded Elli in 2018</b> (the group's energy &amp; charging brand) and runs flexibility through <b>Elli Flex</b>; Shell acquired NewMotion (2017) and Greenlots (2019); BP acquired Chargemaster (2018); GM partnered with Bechtel for its network — exactly the value-stacking combinations of Table 5.1 of the Guidehouse white paper.</div>`;
+
+function applyLang(lang) {
+ LANG = lang;
+ try { localStorage.setItem("t2g_lang", lang); } catch (e) {}
+ document.querySelectorAll("[data-i18n]").forEach(el => {
+ const v = I18N[el.dataset.i18n];
+ if (v && v[lang]) el.innerHTML = v[lang];
+ });
+ document.querySelectorAll("#langSwitch button").forEach(b =>
+ b.classList.toggle("active", b.dataset.lang === lang));
+ /* refresh dynamic content */
+ if (typeof LAST_OPT !== "undefined" && LAST_OPT && LAST_OPT.options.length) renderOptions();
+ else { const o = document.getElementById("options");
+ if (o) o.innerHTML = '<div class="note">' + t("optEmpty") + "</div>"; }
+ if (typeof SESSION === "undefined" || !SESSION)
+ document.getElementById("sessInfo").textContent = t("sessInfoDef");
+ else if (typeof renderLastSession === "function") renderLastSession();
+ document.getElementById("btnPlay").textContent = (typeof playing !== "undefined" && playing) ? "\u23F8 Pause" : t("btnPlay");
+ document.getElementById("btnFleetPlay").textContent = (typeof fleetPlaying !== "undefined" && fleetPlaying) ? "\u23F8 Pause" : t("btnFleetPlay");
+ const sb = document.getElementById("startSessionBtn");
+ if (sb) sb.textContent = t("dStartBtn");
+ if (typeof drawFleet === "function") drawFleet();
+ if (document.querySelector("#tab-stack.active")) loadStack();
+ if (document.querySelector("#tab-grid.active")) loadGrid();
+}
+
+document.querySelectorAll("#langSwitch button").forEach(b => b.onclick = () => applyLang(b.dataset.lang));
+window.addEventListener("load", () => {
+ try {
+ const q = new URLSearchParams(location.search).get("lang");
+ if (q === "en" || q === "fr") LANG = q;
+ } catch (e) {}
+ applyLang(LANG);
+});
+
+</script>
+
+<script>
+/* ================= flotte mobile (partie 1 : complexité de la charge mobile) ================= */
+let FLEET_CARS = [], fleetHour = 18.0, fleetPlaying = false, fleetTimer = null;
+
+function initFleet() {
+ FLEET_CARS = [];
+ for (let i = 0; i < 60; i++) {
+ FLEET_CARS.push({
+ hx: 1.5 + Math.random() * 8, hy: 1.5 + Math.random() * 8, // domicile (périphérie)
+ wx: 6 + Math.random() * 11, wy: 6 + Math.random() * 11, // travail
+ ex: 3 + Math.random() * 14, ey: 3 + Math.random() * 14, // activités du soir
+ v2g: Math.random() < 0.4,
+ s0: 55 + Math.random() * 20, // SoC à 00h
+ jitter: (Math.random() - 0.5)
+ });
+ }
+}
+
+/* courbe de SoC déterministe sur la journée (%, interpolation linéaire par segments) */
+function fleetSoc(c, h) {
+ let s = c.s0;
+ const seg = (h0, h1, ds) => {
+ if (h >= h1) s += ds;
+ else if (h > h0) s += ds * (h - h0) / (h1 - h0);
+ };
+ seg(7, 9, -16); // trajet domicile → travail
+ seg(9, 12, 5); seg(12, 14, 8); // recharge de journée au travail
+ seg(14, 17.2, -5); // trajets pros
+ seg(17.2, 19, -7); // travail → activités du soir
+ seg(19, 21.4, c.v2g ? -8 : 0); // décharge V2G sur le pic
+ seg(21.4, 23.4, -6); // retour domicile
+ seg(23.4, 24, 10); // début de recharge nocturne
+ return Math.max(8, Math.min(100, s));
+}
+
+function fleetState(c, h) {
+ const j = c.jitter, soc = fleetSoc(c, h);
+ const windows = [
+ [7 + j * 0.4, 9 + j * 0.4], // domicile → travail
+ [17.2 + j * 0.4, 19 + j * 0.4], // travail → activités
+ [21.4 + j * 0.4, 23.4 + j * 0.4] // activités → domicile
+ ];
+ for (const [a, b] of windows) {
+ if (h > a && h < b) return {state: "driving", soc};
+ }
+ if ((h < 7 + j * 0.4 || h >= 23.4 + j * 0.4) && soc < 97) return {state: "charging", soc};
+ if (h >= 12 && h < 14 && soc < 88) return {state: "charging", soc};
+ if (h >= 19 + j * 0.4 && h < 21.4 + j * 0.4 && c.v2g && soc > 55) return {state: "v2g", soc};
+ return {state: "parked", soc};
+}
+
+function fleetPos(c, h) {
+ const j = c.jitter;
+ const K = [
+ [0, c.hx, c.hy], [7 + j * 0.4, c.hx, c.hy],
+ [9 + j * 0.4, c.wx, c.wy], [17.2 + j * 0.4, c.wx, c.wy],
+ [19 + j * 0.4, c.ex, c.ey], [21.4 + j * 0.4, c.ex, c.ey],
+ [23.4 + j * 0.4, c.hx, c.hy], [24, c.hx, c.hy]
+ ];
+ let a = K[0], b = K[K.length - 1];
+ for (let i = 0; i < K.length - 1; i++) {
+ if (h >= K[i][0] && h <= K[i + 1][0]) { a = K[i]; b = K[i + 1]; break; }
+ }
+ const t = b[0] === a[0] ? 0 : Math.max(0, Math.min(1, (h - a[0]) / (b[0] - a[0])));
+ return {x: a[1] + (b[1] - a[1]) * t, y: a[2] + (b[2] - a[2]) * t};
+}
+
+const FLEET_COLORS = {driving: "#f59e0b", charging: "#2dd4bf", v2g: "#f87171", parked: "#55627f"};
+
+function drawFleet() {
+ const cv = $("fleetMap"), {ctx, w, h} = prep(cv);
+ const pad = 34;
+ ctx.clearRect(0, 0, w, h);
+ const X = x => pad + x / 20 * (w - 2 * pad);
+ const Y = y => h - pad - y / 20 * (h - 2 * pad);
+
+ ctx.strokeStyle = "#1a2540"; ctx.lineWidth = 1;
+ for (let i = 0; i <= 20; i += 2) {
+ ctx.beginPath(); ctx.moveTo(X(i), Y(0)); ctx.lineTo(X(i), Y(20)); ctx.stroke();
+ ctx.beginPath(); ctx.moveTo(X(0), Y(i)); ctx.lineTo(X(20), Y(i)); ctx.stroke();
+ }
+ ctx.fillStyle = "#8294b5"; ctx.font = "10px sans-serif";
+ ctx.fillText("00h", 4, h - 6); ctx.fillText(Math.floor(fleetHour) + "h" + String(Math.round(fleetHour % 1 * 60)).padStart(2, "0"), w - 40, 14);
+
+ if (META) for (const st of META.stations) { // bornes en arrière-plan
+ ctx.beginPath(); ctx.arc(X(st.x), Y(st.y), 4, 0, 7);
+ ctx.fillStyle = "#26314d"; ctx.fill();
+ }
+
+ const counts = {driving: 0, charging: 0, v2g: 0, parked: 0};
+ let powerV2G = 0;
+ for (const c of FLEET_CARS) {
+ const p = fleetPos(c, fleetHour);
+ const s = fleetState(c, fleetHour);
+ counts[s.state]++;
+ if (s.state === "v2g") powerV2G += 3.3;
+ ctx.beginPath(); ctx.arc(X(p.x), Y(p.y), s.state === "parked" ? 3.5 : 5, 0, 7);
+ ctx.fillStyle = FLEET_COLORS[s.state];
+ if (s.state !== "parked") { ctx.shadowColor = FLEET_COLORS[s.state]; ctx.shadowBlur = 6; }
+ ctx.fill(); ctx.shadowBlur = 0;
+ }
+
+ $("fHour").textContent = Math.floor(fleetHour) + "h" + String(Math.round(fleetHour % 1 * 60)).padStart(2, "0");
+ $("fHourVal").textContent = $("fHour").textContent;
+ $("fCharging").textContent = counts.charging;
+ $("fV2G").textContent = counts.v2g;
+ $("fDriving").textContent = counts.driving;
+ $("fUnknown").textContent = counts.driving + " (" + Math.round(100 * counts.driving / FLEET_CARS.length) + "%)";
+ $("fInsight").textContent =
+ counts.v2g > 0
+ ? fmt(t("dInsightV2G"), {n: counts.v2g, p: powerV2G.toFixed(1)})
+ : counts.driving > 0
+ ? fmt(t("dInsightDriving"), {n: counts.driving})
+ : "";
+}
+
+function fleetRender() {
+ $("fSlider").value = fleetHour;
+ drawFleet();
+}
+
+function toggleFleet() {
+ fleetPlaying = !fleetPlaying;
+ $("btnFleetPlay").textContent = fleetPlaying ? "Pause" : t("btnFleetPlay");
+ if (fleetPlaying) fleetTimer = setInterval(() => {
+ fleetHour = (fleetHour + 0.1) % 24;
+ fleetRender();
+ }, 120);
+ else clearInterval(fleetTimer);
+}
+
+window.addEventListener("load", () => {
+ initFleet();
+ $("fSlider").oninput = e => { fleetHour = parseFloat(e.target.value); fleetPlaying = false;
+ clearInterval(fleetTimer); $("btnFleetPlay").textContent = t("btnFleetPlay"); fleetRender(); };
+ $("btnFleetPlay").onclick = toggleFleet;
+ $("btnFleetReset").onclick = () => { initFleet(); fleetHour = 18; if (fleetPlaying) toggleFleet(); fleetRender(); };
+ fleetRender();
+});
+</script>
+
+<script>
+/* ================= live ticker + occupancy + tooltips ================= */
+let LIVE = null;
+
+function refreshLive() {
+ api("/api/live").then(d => {
+ LIVE = d;
+ $("tickPrice").innerHTML = "Prix : <b>" + d.price.toFixed(2) + " €/kWh</b>";
+ $("tickCo2").innerHTML = "CO₂ : <b>" + d.co2 + " g/kWh</b>";
+ $("tickHour").textContent = String(d.hour).padStart(2, "0") + "h00";
+ drawMap();
+ }).catch(() => {});
+}
+
+function mapXY(st, cv) {
+ const pad = 40, W = cv.clientWidth, H = cv.clientHeight;
+ return {x: pad + st.x / 20 * (W - 80), y: H - pad - st.y / 20 * (H - 80)};
+}
+
+$("map").addEventListener("mousemove", e => {
+ if (!META || !META.stations) return;
+ const rect = e.target.getBoundingClientRect();
+ const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+ let best = null, bd = 1e9;
+ for (const st of META.stations) {
+ const p = mapXY(st, e.target);
+ const d = Math.hypot(p.x - mx, p.y - my);
+ if (d < bd) { bd = d; best = st; }
+ }
+ const tip = $("mapTip");
+ if (best && bd < 20) {
+ const occ = LIVE ? LIVE.stations.find(o => o.id === best.id) : null;
+ const price = META.spot_prices[LIVE ? LIVE.hour : 0] + best.markup;
+ tip.innerHTML = "<b>" + best.name + "</b><br>" + best.type + " " + best.kw + " kW" +
+ (best.v2g ? " · V2G" : "") + "<br>" +
+ (occ ? fmt(t("freeSlots"), {f: occ.free, s: occ.slots}) : "") +
+ "<br>" + price.toFixed(2) + " €/kWh";
+ tip.style.display = "block";
+ tip.style.left = Math.min(mx + 14, rect.width - 170) + "px";
+ tip.style.top = (my + 10) + "px";
+ } else tip.style.display = "none";
+});
+$("map").addEventListener("mouseleave", () => $("mapTip").style.display = "none");
+
+$("planChart").addEventListener("mousemove", e => {
+ if (!LAST_OPT || !LAST_OPT.options.length) return;
+ const tl = LAST_OPT.options[selectedIdx].timeline;
+ const rect = e.target.getBoundingClientRect();
+ const padL = 38, cw = rect.width - 50;
+ const bw = cw / tl.length;
+ const i = Math.floor((e.clientX - rect.left - padL) / bw);
+ const tip = $("planTip");
+ if (i >= 0 && i < tl.length) {
+ const sl = tl[i];
+ tip.innerHTML = "<b>" + sl.h + "h</b> — " + sl.price.toFixed(2) + " €/kWh<br>" +
+ (sl.charge_kw > 0 ? " " + sl.charge_kw.toFixed(0) + " kW" : "") +
+ (sl.discharge_kw > 0 ? " → " + sl.discharge_kw.toFixed(0) + " kW" : "") +
+ (sl.charge_kw === 0 && sl.discharge_kw === 0 ? t("dModeIdle") : "");
+ tip.style.display = "block";
+ tip.style.left = Math.min(e.clientX - rect.left + 12, rect.width - 150) + "px";
+ tip.style.top = (e.clientY - rect.top - 40) + "px";
+ } else tip.style.display = "none";
+});
+$("planChart").addEventListener("mouseleave", () => $("planTip").style.display = "none");
+
+/* ================= break-even calculator ================= */
+function loadBreakEven() {
+ api("/api/break_even", {charger: $("beType").value,
+ utilization: +$("beUtil").value, margin: +$("beMargin").value}).then(r => {
+ $("beCapex").textContent = r.capex.toLocaleString() + " €";
+ $("beKwh").textContent = r.kwh_year.toLocaleString() + " kWh";
+ const p = $("beProfit");
+ p.textContent = (r.profit_year < 0 ? "−" : "") + Math.abs(r.profit_year).toLocaleString() + " €";
+ p.style.color = r.profit_year > 0 ? "var(--good)" : "var(--bad)";
+ const pb = $("bePayback");
+ pb.textContent = r.payback_years ? r.payback_years + " ans" : t("beNever");
+ pb.style.color = r.payback_years && r.payback_years <= 5 ? "var(--good)" : "var(--warn)";
+ $("beUtilVal").textContent = r.utilization_pct + "%";
+ $("beMarginVal").textContent = r.margin_ct + " c€/kWh";
+ });
+}
+["beType", "beUtil", "beMargin"].forEach(id => {
+ $(id).addEventListener("input", loadBreakEven);
+ $(id).addEventListener("change", loadBreakEven);
+});
+
+/* ================= pays : retours d'expérience ================= */
+let EXP = null;
+function loadExp() {
+ api("/api/countries").then(d => { EXP = d; renderExp(); });
+}
+function renderExp() {
+ if (!EXP) return;
+ const L = o => o[LANG] || o.fr;
+ $("expTable").querySelector("tbody").innerHTML = EXP.countries.map(c =>
+ `<tr><td><b>${L(c.country)}</b></td><td class="num"><b>${c.share}%</b></td>
+ <td>${L(c.v2g)}</td><td>${L(c.actors)}</td><td>${L(c.policy)}</td></tr>`).join("");
+ const {ctx, w, h} = prep($("expChart"));
+ ctx.clearRect(0, 0, w, h);
+ const padL = 170, padT = 8;
+ const cw = w - padL - 20, ch = h - 20;
+ const max = Math.max(...EXP.countries.map(c => c.share)) * 1.15;
+ const bh = ch / EXP.countries.length;
+ EXP.countries.forEach((c, i) => {
+ const y = padT + i * bh;
+ ctx.fillStyle = "#dbe4f5"; ctx.font = "12px sans-serif"; ctx.textAlign = "right";
+ ctx.fillText(L(c.country), padL - 10, y + bh * 0.62);
+ ctx.fillStyle = "#2dd4bf";
+ ctx.fillRect(padL, y + bh * 0.2, (c.share / max) * cw, bh * 0.55);
+ ctx.fillStyle = "#dbe4f5"; ctx.textAlign = "left"; ctx.font = "bold 12px sans-serif";
+ ctx.fillText(c.share + "%", padL + (c.share / max) * cw + 6, y + bh * 0.62);
+ });
+ ctx.textAlign = "left";
+}
+
+/* ================= planificateur de trajet ================= */
+$("btnTrip").onclick = async () => {
+ const body = {vehicle: $("vehicle").value, soc: +$("soc").value, target: +$("target").value,
+ origin: $("tripOrigin").value, destination: $("destination").value};
+ const r = await api("/api/trip", body);
+ let html = `<div class="note"><b>${r.origin} → ${r.destination}</b> — ${r.distance_km} km, ${r.energy_kwh} kWh</div>`;
+ if (r.direct) {
+ html += `<div class="note" style="color:var(--good)">${fmt(t("tripDirect"), {s: r.arrival_soc_pct})}</div>`;
+ } else if (!r.found) {
+ html += `<div class="note" style="color:var(--bad)">${t("tripNoStop")}</div>`;
+ } else {
+ html += `<div class="note" style="color:var(--warn)">${t("tripStop")}</div>`;
+ r.stops.forEach((stp, i) => {
+ html += `<div class="opt${i === 0 ? " best" : ""}"><div class="name">${i === 0 ? " " : ""}${stp.station}
+ <span class="cost">${fmt(t("dTripCost"), {c: stp.cost})}</span></div>
+ <div class="row"><span>${fmt(t("dTripDetour"), {km: stp.detour_km})}</span>
+ <span>${fmt(t("dTripCharge"), {k: stp.charge_kwh, h: stp.duration_h})}</span>
+ ${stp.v2g ? '<span class="badge v2g">V2G</span>' : ""}</div></div>`;
+ });
+ }
+ $("tripResult").innerHTML = html;
+};
+
+/* ================= registre des sessions actives ================= */
+function loadSessions() {
+ api("/api/sessions").then(d => {
+ const tb = $("sessTable").querySelector("tbody");
+ tb.innerHTML = d.sessions.length ? d.sessions.map(x => {
+ const mode = x.mode === "charging" ? t("dModeCharging") :
+ x.mode === "v2g_discharge" ? t("dModeV2G") : t("dModeIdle");
+ return `<tr><td>${x.id}</td><td>${x.vehicle}</td><td>${x.station}</td>
+ <td><span class="modechip mode-${x.mode}">${mode}</span></td>
+ <td class="num">${x.soc_pct}</td><td class="num">${x.progress}%</td>
+ <td>${x.done ? t("stDone") : t("stActive")}</td></tr>`;
+ }).join("") : `<tr><td colspan="7" style="color:var(--muted)">${t("sessRegEmpty")}</td></tr>`;
+ }).catch(() => {});
+}
+
+setInterval(refreshLive, 5000);
+setInterval(loadSessions, 5000);
+let _rsz;
+window.addEventListener("resize", () => {
+ clearTimeout(_rsz);
+ _rsz = setTimeout(() => {
+ drawMap();
+ if (LAST_OPT && LAST_OPT.options.length && $("planWrap").style.display !== "none") drawPlanChart();
+ drawFleet();
+ if (document.querySelector("#tab-grid.active")) loadGrid();
+ if (document.querySelector("#tab-stack.active")) loadStack();
+ if (document.querySelector("#tab-exp.active")) renderExp();
+ }, 200);
+});
+window.addEventListener("load", () => { refreshLive(); loadBreakEven(); loadSessions(); });
+</script>
+
+<script>
+/* ================= init ================= */
+window.addEventListener("load", async () => {
+ META = await api("/api/meta");
+ $("vehicle").innerHTML = META.vehicles.map(v =>
+ `<option value="${v.id}">${v.name} — ${v.battery} kWh${v.v2g ? " · V2G" : ""}</option>`).join("");
+ $("destination").innerHTML = META.destinations.map(d =>
+ `<option value="${d.id}">${d.name}</option>`).join("");
+ $("tripOrigin").innerHTML = META.destinations.map(d =>
+ `<option value="${d.id}">${d.name}</option>`).join("");
+ $("soc").oninput = () => $("socVal").textContent = $("soc").value + "%";
+ $("target").oninput = () => $("targetVal").textContent = $("target").value + "%";
+ $("btnOptimize").onclick = optimize;
+ $("btnStep").onclick = stepSession;
+ $("btnPlay").onclick = togglePlay;
+ $("btnStack").onclick = loadStack;
+ $("btnGrid").onclick = loadGrid;
+ $("btnReset").onclick = () => { SESSION = null; if (playing) togglePlay();
+ $("sessInfo").textContent = t("dResetMsg"); };
+ const startBtn = document.createElement("button");
+ startBtn.id = "startSessionBtn";
+ startBtn.className = "btn secondary";
+ startBtn.style.cssText = "width:100%;text-align:center;";
+ startBtn.textContent = t("dStartBtn");
+ startBtn.onclick = startSession;
+ $("options").after(startBtn);
+ optimize();
+});
+</script>
+
+
+
+</body>
+</html>
