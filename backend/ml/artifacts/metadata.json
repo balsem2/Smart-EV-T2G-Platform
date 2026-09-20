@@ -1,0 +1,89 @@
+{
+  "model_name": "hist-gradient-boosting-at-v1",
+  "trained_at": "2026-09-20T20:37:05.864499+00:00",
+  "data_start": "2015-01-01T07:15:00",
+  "data_end": "2018-10-02T21:30:00",
+  "feature_columns": [
+    "quarter_sin",
+    "quarter_cos",
+    "weekday_sin",
+    "weekday_cos",
+    "month_sin",
+    "month_cos",
+    "is_weekend",
+    "electricity_price_lag_1",
+    "electricity_price_lag_4",
+    "electricity_price_lag_96",
+    "electricity_price_lag_672",
+    "electricity_price_rolling_mean_4",
+    "electricity_price_rolling_mean_96",
+    "grid_load_lag_1",
+    "grid_load_lag_4",
+    "grid_load_lag_96",
+    "grid_load_lag_672",
+    "grid_load_rolling_mean_4",
+    "grid_load_rolling_mean_96",
+    "solar_generation_lag_1",
+    "solar_generation_lag_4",
+    "solar_generation_lag_96",
+    "solar_generation_lag_672",
+    "solar_generation_rolling_mean_4",
+    "solar_generation_rolling_mean_96",
+    "wind_generation_lag_1",
+    "wind_generation_lag_4",
+    "wind_generation_lag_96",
+    "wind_generation_lag_672",
+    "wind_generation_rolling_mean_4",
+    "wind_generation_rolling_mean_96"
+  ],
+  "metrics": {
+    "electricity_price": {
+      "validation": {
+        "mae": 3.377400893552105,
+        "rmse": 5.4022747859710405,
+        "r2": 0.9206907756116828
+      },
+      "test": {
+        "mae": 3.5959082845631345,
+        "rmse": 9.491354275769964,
+        "r2": 0.763220403879426
+      }
+    },
+    "grid_load": {
+      "validation": {
+        "mae": 39.770498712767974,
+        "rmse": 54.59607512239447,
+        "r2": 0.9985068510527814
+      },
+      "test": {
+        "mae": 35.36511801835646,
+        "rmse": 48.05504522729812,
+        "r2": 0.9985198221757537
+      }
+    },
+    "solar_generation": {
+      "validation": {
+        "mae": 1.5838000696610233,
+        "rmse": 3.245753906472778,
+        "r2": 0.9994665332772642
+      },
+      "test": {
+        "mae": 12.58695763113541,
+        "rmse": 33.15281878272127,
+        "r2": 0.9849694724599374
+      }
+    },
+    "wind_generation": {
+      "validation": {
+        "mae": 26.74634042492134,
+        "rmse": 40.34168950762673,
+        "r2": 0.9964795662267921
+      },
+      "test": {
+        "mae": 25.754443729936902,
+        "rmse": 44.93512984400961,
+        "r2": 0.9938385071236651
+      }
+    }
+  }
+}

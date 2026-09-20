@@ -1,0 +1,21 @@
+# Python virtual environment
+.venv/
+
+# Python cache and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local configuration and secrets
+.env
+backend/.env
+
+# IDE and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Frontend dependencies and production build
+node_modules/
+dist/

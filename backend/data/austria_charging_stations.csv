@@ -1,0 +1,10 @@
+station_id,station_name,city,latitude,longitude,charger_type,power_kw,operator,source
+EAT5726095,BOE Apartment Hotel Singerstrasse,Wien,48.206473,16.375692,Type 2 AC,11.1,SMATRICS GmbH und Co KG,E-Control Ladestellenverzeichnis
+E72E21FE1645CDDDAF86C3B285BB0,Graz Sparkassenplatz,Graz,47.069652,15.437908,Type 2 AC,11,Energie Steiermark,E-Control Ladestellenverzeichnis
+E9991777,Raiffeisenverband Schallmoos,Salzburg,47.809721,13.054262,Type 2 AC,11,Salzburg AG,E-Control Ladestellenverzeichnis
+EF7EA3647C2B541E0A74021BA,Tiefgarage Hauptplatz,Linz,48.306627,14.285100,Type 2 AC,11,LINZ AG,E-Control Ladestellenverzeichnis
+E04C31C1556164A7D92A5A4EB,UNIQA OAMTC Landesdirektion Tirol,Innsbruck,47.267169,11.402046,Type 2 AC,11,OAMTC Verbandsbetriebe GmbH,E-Control Ladestellenverzeichnis
+E5178470,STW eMobil Dr. Hermann Gasse 2,Klagenfurt,46.624036,14.305766,Type 2 AC,22,Energie Klagenfurt GmbH,E-Control Ladestellenverzeichnis
+E5171278,Intern Kundenparkplatz,Eisenstadt,47.844160,16.522525,Type 2 AC,11,ChargePoint Austria GmbH,E-Control Ladestellenverzeichnis
+ED0F581E5C48648C9AD18A1D7,Parkplatz Rathausbezirk,Bregenz,47.503108,9.748350,Type 2 AC,22,illwerke vkw AG,E-Control Ladestellenverzeichnis
+EC8A426699D4F4851929B3C53,Tiefgarage Rathausplatz,St. Polten,48.204770,15.621564,Type 2 AC,11,EVN Energieservices GmbH,E-Control Ladestellenverzeichnis

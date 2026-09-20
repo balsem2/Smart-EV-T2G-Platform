@@ -1,0 +1,112 @@
+{
+  "methodology": "DDM1 / CRISP-DM data understanding and baseline",
+  "country": "Austria",
+  "frequency_minutes": 15,
+  "rows": 131158,
+  "start": "2015-01-01T07:15:00",
+  "end": "2018-10-02T21:30:00",
+  "duplicate_timestamps": 0,
+  "gaps_over_15_minutes": 8,
+  "estimated_missing_slots": 420,
+  "negative_price_rows": 2245,
+  "statistics": {
+    "electricity_price": {
+      "count": 131158,
+      "min": -149.99,
+      "q1": 23.95,
+      "median": 33.0,
+      "mean": 33.94902095182909,
+      "q3": 43.02,
+      "max": 977.74,
+      "std": 16.82522991801368,
+      "iqr_outliers": 4141
+    },
+    "grid_load": {
+      "count": 131158,
+      "min": 615.2,
+      "q1": 5948.8,
+      "median": 7042.0,
+      "mean": 7073.763652998673,
+      "q3": 8095.2,
+      "max": 10836.0,
+      "std": 1398.4856183142233,
+      "iqr_outliers": 177
+    },
+    "solar_generation": {
+      "count": 131158,
+      "min": 0.0,
+      "q1": 0.0,
+      "median": 13.93,
+      "mean": 126.31889270955641,
+      "q3": 214.0675,
+      "max": 917.79,
+      "std": 183.15616903210386,
+      "iqr_outliers": 5809
+    },
+    "wind_generation": {
+      "count": 131158,
+      "min": 0.0,
+      "q1": 150.0,
+      "median": 445.765,
+      "mean": 648.4309839277818,
+      "q3": 1012.48,
+      "max": 2678.95,
+      "std": 604.5756450340392,
+      "iqr_outliers": 1467
+    }
+  },
+  "chronological_split": {
+    "train": {
+      "rows": 91810,
+      "start": "2015-01-01T07:15:00",
+      "end": "2017-08-18T22:30:00"
+    },
+    "validation": {
+      "rows": 19674,
+      "start": "2017-08-18T22:45:00",
+      "end": "2018-03-11T21:00:00"
+    },
+    "test": {
+      "rows": 19674,
+      "start": "2018-03-11T21:15:00",
+      "end": "2018-10-02T21:30:00"
+    }
+  },
+  "baseline_test_metrics": {
+    "electricity_price": {
+      "mae": 15.87023405362952,
+      "rmse": 20.64650957926836,
+      "r2": -0.12828444454805443
+    },
+    "grid_load": {
+      "mae": 442.4753037177297,
+      "rmse": 576.506786978334,
+      "r2": 0.7875519103873341
+    },
+    "solar_generation": {
+      "mae": 120.80793416217202,
+      "rmse": 193.18280591491387,
+      "r2": 0.4863132316428457
+    },
+    "wind_generation": {
+      "mae": 459.2637185906608,
+      "rmse": 573.9046993576076,
+      "r2": 0.006830195417205642
+    }
+  },
+  "recommended_features": [
+    "hour_sin",
+    "hour_cos",
+    "weekday_sin",
+    "weekday_cos",
+    "month_sin",
+    "month_cos",
+    "is_weekend",
+    "lag_15m",
+    "lag_1h",
+    "lag_24h",
+    "lag_7d",
+    "rolling_mean_1h",
+    "rolling_mean_24h"
+  ]
+}
