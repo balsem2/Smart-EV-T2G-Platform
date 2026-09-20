@@ -3,6 +3,7 @@
   "trained_at": "2026-09-20T20:37:05.864499+00:00",
   "data_start": "2015-01-01T07:15:00",
   "data_end": "2018-10-02T21:30:00",
+  "metrics_scope": "one_step_15_minute",
   "feature_columns": [
     "quarter_sin",
     "quarter_cos",

@@ -76,6 +76,7 @@ def main() -> None:
         "trained_at": trained_at,
         "data_start": raw.index.min().isoformat(),
         "data_end": raw.index.max().isoformat(),
+        "metrics_scope": "one_step_15_minute",
         "feature_columns": list(features.columns),
         "metrics": metrics,
         "models": models,
@@ -122,9 +123,9 @@ not be presented as recursive 24-hour accuracy.
 ## Interpretation
 
 The ML models beat the historical slot-average baseline for every target on the
-held-out chronological test set. Runtime forecasts are recursive when the app
-needs several future slots, so a separate rolling 24-hour backtest remains the
-next validation gate before claiming day-ahead production accuracy.
+held-out chronological test set. These are not day-ahead results. Run
+`python -m scripts.backtest_energy_forecaster` to produce the separate recursive
+24-hour evaluation before making day-ahead accuracy claims.
 """
     (REPORT_DIR / "MODEL_RESULTS.md").write_text(result_markdown, encoding="utf-8")
     print(f"Saved model bundle to {ARTIFACT_DIR}")

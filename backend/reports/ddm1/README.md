@@ -34,3 +34,10 @@
 The current daily-profile optimizer is retained as the baseline. A trained model
 must improve validation and test MAE/RMSE before it can replace this fallback.
 MAPE is not the primary metric because Austrian day-ahead prices can be zero or negative.
+
+## Forecast validation
+
+`MODEL_RESULTS.md` contains chronological one-step (15-minute) results.
+`RECURSIVE_BACKTEST.md` contains the stricter 24-hour recursive evaluation used
+to assess day-ahead behavior. The recursive test uses 29 weekly origins from the
+held-out period and compares the model with a previous-day seasonal baseline.

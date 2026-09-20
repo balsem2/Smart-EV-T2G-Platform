@@ -14,6 +14,5 @@ not be presented as recursive 24-hour accuracy.
 ## Interpretation
 
 The ML models beat the historical slot-average baseline for every target on the
-held-out chronological test set. Runtime forecasts are recursive when the app
-needs several future slots, so a separate rolling 24-hour backtest remains the
-next validation gate before claiming day-ahead production accuracy.
+held-out chronological test set. These are not day-ahead results. The completed
+recursive day-ahead evaluation is documented in `RECURSIVE_BACKTEST.md`.

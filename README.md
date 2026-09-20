@@ -66,16 +66,16 @@ Dashboard: <http://127.0.0.1:5173>
 
 ## Energy data
 
-The development database contains 2,880 Austrian 15-minute observations from
-September 2018. Price, load, solar, and wind all come from the same country.
+The development database contains 131,158 complete Austrian 15-minute
+observations from January 2015 to October 2018. Price, load, solar, and wind all
+come from the same country.
 
-To import the same period again:
+To import the complete valid Austrian history again:
 
 ```powershell
 cd backend
 ..\.venv\Scripts\python.exe -m scripts.import_energy_data `
-  "PATH_TO\time_series_15min_singleindex.csv" `
-  --start 2018-09-01 --end 2018-10-01
+  "PATH_TO\time_series_15min_singleindex.csv"
 ```
 
 The importer updates existing timestamps instead of creating duplicates.
@@ -126,10 +126,13 @@ features. Training artifacts and metrics are generated with:
 cd backend
 ..\.venv\Scripts\python.exe -m scripts.analyze_energy_data
 ..\.venv\Scripts\python.exe -m scripts.train_energy_models
+..\.venv\Scripts\python.exe -m scripts.backtest_energy_forecaster
 ```
 
 The optimizer uses the trained forecast when available and automatically falls
-back to the historical daily profile if the artifact cannot be loaded.
+back to the historical daily profile if the artifact cannot be loaded. The
+backtest command evaluates recursive 24-hour predictions on weekly origins from
+the held-out test period and compares them with a previous-day seasonal baseline.
 
 ## Controlled project data
 

@@ -18,6 +18,7 @@ TARGETS = (
 LAGS = (1, 4, 96, 672)
 ROLLING_WINDOWS = (4, 96)
 ARTIFACT_PATH = Path(__file__).resolve().parents[2] / "ml" / "artifacts" / "energy_forecaster.joblib"
+BACKTEST_PATH = Path(__file__).resolve().parents[2] / "reports" / "ddm1" / "recursive_24h_backtest.json"
 
 
 def add_calendar_features(frame: pd.DataFrame) -> pd.DataFrame:
@@ -102,11 +103,23 @@ def forecast_energy(energy_rows, start: datetime, end: datetime) -> list[dict]:
 
 def model_metadata() -> dict:
     bundle = load_bundle()
-    return {
+    metadata = {
         "model_name": bundle["model_name"],
         "trained_at": bundle["trained_at"],
         "data_start": bundle["data_start"],
         "data_end": bundle["data_end"],
         "metrics": bundle["metrics"],
+        "metrics_scope": bundle.get("metrics_scope", "one_step_15_minute"),
         "feature_count": len(bundle["feature_columns"]),
     }
+    if BACKTEST_PATH.exists():
+        import json
+
+        backtest = json.loads(BACKTEST_PATH.read_text(encoding="utf-8"))
+        metadata["recursive_24h_backtest"] = {
+            "origins_evaluated": backtest["origins_evaluated"],
+            "observations_per_target": backtest["observations_per_target"],
+            "baseline": backtest["baseline"],
+            "overall": backtest["overall"],
+        }
+    return metadata
