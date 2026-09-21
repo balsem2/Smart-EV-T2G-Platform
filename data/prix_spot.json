@@ -1,0 +1,32 @@
+{
+ "source": "Fraunhofer Energy-Charts (api.energy-charts.info) — prix day-ahead FR, CC BY 4.0",
+ "fetched_at": "2026-09-21T17:29:14.570911+00:00",
+ "unit": "EUR/kWh",
+ "note": "moyenne par heure sur les 7 derniers jours (UTC)",
+ "spot_prices": [
+  0.1252,
+  0.1165,
+  0.1168,
+  0.1264,
+  0.1539,
+  0.1706,
+  0.1647,
+  0.1303,
+  0.0903,
+  0.0503,
+  0.0302,
+  0.0214,
+  0.0246,
+  0.0265,
+  0.0411,
+  0.0921,
+  0.1739,
+  0.2193,
+  0.2221,
+  0.2033,
+  0.1875,
+  0.1708,
+  0.1482,
+  0.1351
+ ]
+}

@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="700" viewBox="0 0 1260 700" font-family="Segoe UI, Arial, sans-serif">
+  <rect x="0" y="0" width="1260" height="700" fill="#f7f9fc"/>
+  <text x="630" y="46" text-anchor="middle" font-size="26" font-weight="bold" fill="#131c2e">Architecture — VoltHub, plateforme T2G</text>
+  <text x="630" y="72" text-anchor="middle" font-size="14" fill="#5a6a8a">le Load Orchestrator : le cerveau entre les véhicules électriques, les bornes et le réseau</text>
+
+  <rect x="40" y="100" width="340" height="470" rx="12" fill="#eef2fa" stroke="#c5d0e8"/>
+  <rect x="40" y="100" width="340" height="46" rx="12" fill="#131c2e"/>
+  <rect x="40" y="124" width="340" height="22" fill="#131c2e"/>
+  <text x="210" y="130" text-anchor="middle" font-size="18" font-weight="bold" fill="#ffffff">INTERFACE WEB</text>
+  <text x="60" y="180" font-size="14" font-weight="bold" fill="#131c2e">6 onglets spécialisés :</text>
+  <text x="60" y="206" font-size="14" fill="#131c2e">• Recharge intelligente (optimiseur)</text>
+  <text x="60" y="230" font-size="14" fill="#131c2e">• Session en direct + registre</text>
+  <text x="60" y="254" font-size="14" fill="#131c2e">• Modèles économiques et valeur</text>
+  <text x="60" y="278" font-size="14" fill="#131c2e">• Analyse réseau</text>
+  <text x="60" y="302" font-size="14" fill="#131c2e">• Flotte mobile (60 VE)</text>
+  <text x="60" y="326" font-size="14" fill="#131c2e">• Retours d'expérience</text>
+  <text x="60" y="370" font-size="14" font-weight="bold" fill="#131c2e">Bilingue FR / EN (1 clic)</text>
+  <text x="60" y="396" font-size="14" fill="#131c2e">Temps réel : prix · CO2 · occupation</text>
+  <text x="60" y="420" font-size="14" fill="#131c2e">Carte interactive + graphiques</text>
+  <text x="60" y="444" font-size="14" fill="#131c2e">Info-bulles au survol</text>
+  <text x="60" y="480" font-size="12" fill="#5a6a8a">Fonctionne hors ligne — zéro dépendance</text>
+  <text x="60" y="500" font-size="12" fill="#5a6a8a">HTML / CSS / JS purs</text>
+
+  <line x1="395" y1="330" x2="445" y2="330" stroke="#131c2e" stroke-width="3"/>
+  <polygon points="445,324 457,330 445,336" fill="#131c2e"/>
+  <polygon points="395,324 383,330 395,336" fill="#131c2e"/>
+  <text x="421" y="310" text-anchor="middle" font-size="12" fill="#5a6a8a">HTTP</text>
+  <text x="421" y="352" text-anchor="middle" font-size="12" fill="#5a6a8a">JSON</text>
+
+  <rect x="460" y="100" width="340" height="470" rx="12" fill="#eceefe" stroke="#b9c2f2"/>
+  <rect x="460" y="100" width="340" height="46" rx="12" fill="#7c8cf8"/>
+  <rect x="460" y="124" width="340" height="22" fill="#7c8cf8"/>
+  <text x="630" y="130" text-anchor="middle" font-size="18" font-weight="bold" fill="#ffffff">API REST — 12 ENDPOINTS</text>
+  <text x="480" y="180" font-size="14" font-weight="bold" fill="#131c2e">Serveur HTTP Python (stdlib)</text>
+  <text x="480" y="204" font-size="14" fill="#131c2e">Zéro dépendance à installer</text>
+  <text x="480" y="240" font-size="13" fill="#131c2e" font-family="Consolas, monospace">/api/meta</text>
+  <text x="480" y="264" font-size="13" fill="#131c2e" font-family="Consolas, monospace">/api/optimize</text>
+  <text x="480" y="288" font-size="13" fill="#131c2e" font-family="Consolas, monospace">/api/session/start · step</text>
+  <text x="480" y="312" font-size="13" fill="#131c2e" font-family="Consolas, monospace">/api/sessions (registre)</text>
+  <text x="480" y="336" font-size="13" fill="#131c2e" font-family="Consolas, monospace">/api/live (prix · CO2 · bornes)</text>
+  <text x="480" y="360" font-size="13" fill="#131c2e" font-family="Consolas, monospace">/api/trip (planificateur)</text>
+  <text x="480" y="384" font-size="13" fill="#131c2e" font-family="Consolas, monospace">/api/valuestack · /api/grid</text>
+  <text x="480" y="408" font-size="13" fill="#131c2e" font-family="Consolas, monospace">/api/break_even · countries</text>
+  <text x="480" y="450" font-size="12" fill="#5a6a8a">Requêtes/réponses JSON —</text>
+  <text x="480" y="470" font-size="12" fill="#5a6a8a">polling temps réel toutes les 5 s</text>
+
+  <line x1="815" y1="330" x2="865" y2="330" stroke="#131c2e" stroke-width="3"/>
+  <polygon points="865,324 877,330 865,336" fill="#131c2e"/>
+  <polygon points="815,324 803,330 815,336" fill="#131c2e"/>
+  <text x="841" y="310" text-anchor="middle" font-size="12" fill="#5a6a8a">fonctions</text>
+  <text x="841" y="352" text-anchor="middle" font-size="12" fill="#5a6a8a">Python</text>
+
+  <rect x="880" y="100" width="340" height="470" rx="12" fill="#e2faf5" stroke="#2dd4bf"/>
+  <rect x="880" y="100" width="340" height="46" rx="12" fill="#0d9488"/>
+  <rect x="880" y="124" width="340" height="22" fill="#0d9488"/>
+  <text x="1050" y="130" text-anchor="middle" font-size="18" font-weight="bold" fill="#ffffff">MOTEUR — LOAD ORCHESTRATOR</text>
+  <text x="900" y="180" font-size="14" font-weight="bold" fill="#0d9488">Décide QUAND :</text>
+  <text x="1035" y="180" font-size="13" fill="#131c2e">créneaux les moins chers</text>
+  <text x="900" y="208" font-size="14" font-weight="bold" fill="#0d9488">Décide LA PUISSANCE :</text>
+  <text x="900" y="228" font-size="13" fill="#131c2e">modulation (pic divisé par 2)</text>
+  <text x="900" y="256" font-size="14" font-weight="bold" fill="#0d9488">V2G :</text>
+  <text x="900" y="276" font-size="13" fill="#131c2e">décharge au pic, réserve 30 %</text>
+  <text x="900" y="304" font-size="14" font-weight="bold" fill="#0d9488">Équilibre le réseau :</text>
+  <text x="900" y="324" font-size="13" fill="#131c2e">pic de charge réduit de 65 %</text>
+  <text x="900" y="356" font-size="13" fill="#131c2e">Estimations : lieux · temps ·</text>
+  <text x="900" y="376" font-size="13" fill="#131c2e">durée · coût (taper, spot 24 h)</text>
+  <text x="900" y="404" font-size="13" fill="#131c2e">Planificateur de trajet</text>
+  <text x="900" y="428" font-size="13" fill="#131c2e">Registre des sessions</text>
+  <text x="900" y="452" font-size="13" fill="#131c2e">Value stacking · point mort</text>
+  <text x="900" y="484" font-size="12" fill="#5a6a8a">52 tests automatisés · 0 erreur</text>
+  <text x="900" y="504" font-size="12" fill="#5a6a8a">CO2 : charge propre, décharge au pic</text>
+
+  <rect x="40" y="600" width="1180" height="54" rx="12" fill="#131c2e"/>
+  <text x="630" y="633" text-anchor="middle" font-size="15" fill="#ffffff">Ville simulée : 8 bornes · 6 véhicules · 60 VE en flotte · prix spot 24 h · intensité CO2 24 h · destinations</text>
+
+  <text x="630" y="682" text-anchor="middle" font-size="12" fill="#5a6a8a">Roadmap production : OCPP 2.0.1 · ISO 15118-20 (Plug and Charge) · OCPI (roaming) · prix réels ENTSO-E · optimiseur programmation linéaire</text>
+</svg>

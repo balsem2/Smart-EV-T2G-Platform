@@ -1,0 +1,60 @@
+{
+ "source": "Our World in Data — electric-car-sales-share (CC BY)",
+ "fetched_at": "2026-09-21T17:29:14.570911+00:00",
+ "countries": [
+  {
+   "country": {
+    "fr": "Norvège",
+    "en": "Norway"
+   },
+   "share": 97.0,
+   "year": 2025,
+   "source": "Our World in Data (IEA/EAFO), CC BY"
+  },
+  {
+   "country": {
+    "fr": "Pays-Bas",
+    "en": "Netherlands"
+   },
+   "share": 58.0,
+   "year": 2025,
+   "source": "Our World in Data (IEA/EAFO), CC BY"
+  },
+  {
+   "country": {
+    "fr": "Chine",
+    "en": "China"
+   },
+   "share": 53.0,
+   "year": 2025,
+   "source": "Our World in Data (IEA/EAFO), CC BY"
+  },
+  {
+   "country": {
+    "fr": "Allemagne",
+    "en": "Germany"
+   },
+   "share": 30.0,
+   "year": 2025,
+   "source": "Our World in Data (IEA/EAFO), CC BY"
+  },
+  {
+   "country": {
+    "fr": "France",
+    "en": "France"
+   },
+   "share": 26.0,
+   "year": 2025,
+   "source": "Our World in Data (IEA/EAFO), CC BY"
+  },
+  {
+   "country": {
+    "fr": "États-Unis",
+    "en": "United States"
+   },
+   "share": 10.0,
+   "year": 2025,
+   "source": "Our World in Data (IEA/EAFO), CC BY"
+  }
+ ]
+}

@@ -30,7 +30,8 @@ def handle(path, body):
             window_h=int(body.get("window", 10)),
             v2g_on=bool(body.get("v2g", True)),
             start_hour=int(body.get("start_hour", 18)),
-            deg_on=bool(body.get("deg", False)))
+            deg_on=bool(body.get("deg", False)),
+            eco=bool(body.get("eco", False)))
 
     if path == "/api/session/start":
         opt = core.optimize(
@@ -40,7 +41,8 @@ def handle(path, body):
             dest_id=body.get("destination", "d2"),
             window_h=int(body.get("window", 10)),
             v2g_on=bool(body.get("v2g", True)),
-            start_hour=int(body.get("start_hour", 18)))
+            start_hour=int(body.get("start_hour", 18)),
+            eco=bool(body.get("eco", False)))
         if not opt["recommendation"]:
             return 400, {"error": "no reachable station"}
         return 200, core.start_session(opt, soc_pct=float(body.get("soc", 40)))
@@ -71,7 +73,25 @@ def handle(path, body):
         return 200, core.break_even(
             charger=body.get("charger", "DC50"),
             utilization_pct=float(body.get("utilization", 8)),
-            margin_ct=float(body.get("margin", 12)))
+            margin_ct=float(body.get("margin", 12)),
+            lang=body.get("lang", "fr"))
+
+    if path == "/api/site":
+        return 200, core.orchestrate_site(
+            vehicles=body.get("vehicles", []),
+            cap_kw=float(body.get("cap_kw", 22)),
+            window_h=int(body.get("window_h", 8)))
+
+    if path == "/api/site_optimal":
+        return 200, core.site_optimal(
+            vehicles=body.get("vehicles", []),
+            cap_kw=float(body.get("cap_kw", 60)),
+            eco=bool(body.get("eco", False)),
+            v2g_enabled=bool(body.get("v2g_enabled", True)),
+            window_h=int(body.get("window_h", 24)))
+
+    if path == "/api/data_sources":
+        return 200, core.SOURCES
 
     if path == "/api/sessions":
         return 200, core.list_sessions()

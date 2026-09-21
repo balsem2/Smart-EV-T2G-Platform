@@ -17,63 +17,42 @@ import uuid
 # ---------------------------------------------------------------------------
 
 # Hourly spot-like electricity price curve (EUR/kWh) — typical day-ahead shape
-SPOT_PRICES = [
-    0.14, 0.12, 0.10, 0.10, 0.11, 0.13,          # 00-05 night valley
-    0.18, 0.24, 0.27, 0.25, 0.20, 0.17,          # 06-11 morning ramp/peak
-    0.15, 0.15, 0.16, 0.18, 0.22, 0.32,          # 12-17 afternoon ramp
-    0.38, 0.36, 0.28, 0.22, 0.17, 0.15,          # 18-23 evening peak
-]
+import data_loader
 
-STATIONS = [
-    {"id": "st1",  "name": "VoltHub Central Mall",   "x": 5.0,  "y": 6.0,  "type": "DC",  "kw": 150, "v2g": False, "markup": 0.19, "fee": 1.50, "slots": 6},
-    {"id": "st2",  "name": "GreenPark Hub",          "x": 12.0, "y": 4.0,  "type": "DC",  "kw": 50,  "v2g": False, "markup": 0.14, "fee": 0.80, "slots": 4},
-    {"id": "st3",  "name": "Riverside V2G Station",  "x": 15.0, "y": 12.0, "type": "HPC", "kw": 22,  "v2g": True,  "markup": 0.10, "fee": 0.50, "slots": 8},
-    {"id": "st4",  "name": "Business District Garage", "x": 8.0, "y": 13.0, "type": "AC",  "kw": 22,  "v2g": True,  "markup": 0.09, "fee": 0.00, "slots": 12},
-    {"id": "st5",  "name": "Northgate Supercharger", "x": 4.0,  "y": 16.0, "type": "DC",  "kw": 150, "v2g": False, "markup": 0.22, "fee": 2.00, "slots": 8},
-    {"id": "st6",  "name": "University Campus AC",   "x": 10.0, "y": 17.0, "type": "AC",  "kw": 7,   "v2g": True,  "markup": 0.07, "fee": 0.00, "slots": 20},
-    {"id": "st7",  "name": "OldTown Bidirectional",  "x": 9.0,  "y": 8.5,  "type": "HPC", "kw": 11,  "v2g": True,  "markup": 0.11, "fee": 0.30, "slots": 5},
-    {"id": "st8",  "name": "Airport Long-Stay",      "x": 18.0, "y": 6.0,  "type": "AC",  "kw": 22,  "v2g": True,  "markup": 0.08, "fee": 0.00, "slots": 15},
-]
+_DATA = data_loader.load_all()
 
-# Grid carbon intensity (gCO2/kWh) — correlated with the price curve:
-# night/midday = baseload + renewables (clean), evening peak = gas peakers (dirty)
-CO2_INTENSITY = [
-    45, 40, 38, 38, 42, 55,          # 00-05 night baseload
-    90, 140, 180, 150, 120, 100,     # 06-11 morning ramp
-    80, 70, 75, 90, 130, 190,        # 12-15 solar dip
-    380, 420, 350, 240, 160, 90,     # 16-23 evening peakers
-]
+SPOT_PRICES = _DATA["spot_prices"]
+CO2_INTENSITY = _DATA["co2_intensite"]
+SOLAR = _DATA["solaire_pct"]
+STATIONS = _DATA["stations"]
+VEHICLES = {v["id"]: v for v in _DATA["vehicules"]}
+DESTINATIONS = _DATA["destinations"]
+COUNTRIES = _DATA["countries"]
+SOURCES = _DATA["sources"]
 
-# Battery degradation cost of V2G cycling (EUR per kWh exported) —
-# published studies range 0.05–0.12 €/kWh; we use a mid estimate
-DEG_RATE = 0.07
+_HYP = _DATA["hypotheses"]
+DEG_RATE = _HYP["v2g"]["usure_eur_par_kwh"]
+V2G_RESERVE = _HYP["v2g"]["reserve_soc"]
+V2G_EFFICACITE = _HYP["v2g"]["efficacite_aller_retour"]
+MARGE_DEFAUT = _HYP["bornes"]["marge_defaut_eur_par_kwh"]
+CHARGER_TYPES = _HYP["charger_types"]
+TRIP = _HYP["trajet"]
+ECO_CFG = _HYP["eco"]
+SITE_CFG = _HYP["site"]
+BUSINESS = _HYP["business"]
+GRID = _HYP["reseau"]
+CHARGE = _HYP["charge"]
+OCCUPATION = _HYP["occupation"]
 
-VEHICLES = {
-    "zoe":     {"id": "zoe",     "name": "Renault Zoe R135",     "battery": 52, "max_kw": 46,  "cons": 0.17, "v2g": False},
-    "leaf":    {"id": "leaf",    "name": "Nissan Leaf e+",       "battery": 62, "max_kw": 50,  "cons": 0.17, "v2g": True},
-    "id4":     {"id": "id4",     "name": "VW ID.4 Pro",          "battery": 77, "max_kw": 125, "cons": 0.19, "v2g": True},
-    "model3":  {"id": "model3",  "name": "Tesla Model 3 LR",     "battery": 75, "max_kw": 250, "cons": 0.16, "v2g": False},
-    "kangoo":  {"id": "kangoo",  "name": "Renault Kangoo E-Tech (fleet)", "battery": 45, "max_kw": 80, "cons": 0.21, "v2g": True},
-    "ebus":    {"id": "ebus",    "name": "City e-Bus (HD fleet)", "battery": 300, "max_kw": 150, "cons": 1.10, "v2g": True},
-}
-
-DESTINATIONS = [
-    {"id": "d1", "name": "Home — Suburbs",        "x": 3.5,  "y": 3.5},
-    {"id": "d2", "name": "Office — Business District", "x": 8.0, "y": 13.0},
-    {"id": "d3", "name": "Shopping Mall",         "x": 5.0,  "y": 6.0},
-    {"id": "d4", "name": "University Campus",     "x": 10.0, "y": 17.0},
-    {"id": "d5", "name": "Airport T2",            "x": 18.5, "y": 5.5},
-    {"id": "d6", "name": "Convention Center",     "x": 14.5, "y": 11.5},
-]
-
-# Charging taper: available power falls off as the battery fills up
 def _taper(soc):
     """Power multiplier at a given state of charge (0..1)."""
-    if soc < 0.55:
+    if soc < CHARGE["seuil_taper"]:
         return 1.0
     if soc >= 1.0:
         return 0.0
-    return max(0.15, 1.0 - 0.75 * (soc - 0.55) / 0.45)
+    span = 1.0 - CHARGE["seuil_taper"]
+    return max(CHARGE["puissance_min_relative"],
+               1.0 - CHARGE["pente_taper"] * (soc - CHARGE["seuil_taper"]) / span)
 
 def sim_charge_hours(start_kwh, end_kwh, battery, station_kw, vehicle_kw):
     """Simulate charging, return duration in hours and energy delivered."""
@@ -84,14 +63,21 @@ def sim_charge_hours(start_kwh, end_kwh, battery, station_kw, vehicle_kw):
         t += dt
     return t, kwh - start_kwh
 
-
 # ---------------------------------------------------------------------------
 # Optimizer — "estimation des lieux, temps, durée et coût de recharge"
 # ---------------------------------------------------------------------------
 
-def _cheapest_hours(h_start, n_hours, kwh_per_hour, energy_needed, markup):
-    """Smart (V1G) scheduling: pick the cheapest hours inside the parking window."""
-    hours = [(SPOT_PRICES[(h_start + i) % 24] + markup, (h_start + i) % 24)
+def _cheapest_hours(h_start, n_hours, kwh_per_hour, energy_needed, markup,
+                    eco=False, start_hour=None):
+    """Smart (V1G) scheduling: pick the cheapest hours inside the parking window.
+    En mode éco, les heures solaires reçoivent un bonus (prix effectif réduit)."""
+    bonus = {}
+    if eco and start_hour is not None:
+        for i in range(n_hours):
+            h = (h_start + i) % 24
+            bonus[h] = (SOLAR[h] / 100.0) * ECO_CFG["bonus_solaire_eur_par_kwh_max"]
+    hours = [(SPOT_PRICES[(h_start + i) % 24] + markup - bonus.get((h_start + i) % 24, 0.0),
+              (h_start + i) % 24)
              for i in range(n_hours)]
     hours.sort()
     plan = {h: 0.0 for _, h in hours}
@@ -104,13 +90,12 @@ def _cheapest_hours(h_start, n_hours, kwh_per_hour, energy_needed, markup):
         remaining -= take
     return plan, remaining
 
-
 def _v2g_plan(h_start, n_hours, kwh_per_hour, energy_needed, markup,
-              battery, soc_start_kwh, reserve_frac, efficiency):
+              battery, soc_start_kwh, reserve_frac, efficiency, eco=False):
     """Bidirectional plan: discharge during the most expensive hours, recharge during the cheapest."""
     hours = [(SPOT_PRICES[(h_start + i) % 24] + markup, (h_start + i) % 24)
              for i in range(n_hours)]
-    ranked_desc = sorted(hours, reverse=True)
+    ranked_desc = sorted(hours, reverse=True)  # decharge : heures les plus cheres
 
     # Energy we may export: everything above the reserve, minus the energy still
     # needed to reach the target at the end of the window.
@@ -129,20 +114,13 @@ def _v2g_plan(h_start, n_hours, kwh_per_hour, energy_needed, markup,
 
     # Recharge what we exported plus the original need, in the cheapest hours
     total_to_buy = energy_needed + exported / efficiency
-    plan = {h: 0.0 for _, h in hours}
-    remaining = total_to_buy
-    for price, h in sorted(hours):
-        if remaining <= 0:
-            break
-        take = min(kwh_per_hour, remaining)
-        plan[h] += take
-        remaining -= take
+    plan, _short = _cheapest_hours(h_start, n_hours, kwh_per_hour, total_to_buy,
+                                   markup, eco=eco, start_hour=h_start)
 
-    return plan, discharge, exported, revenue, remaining
-
+    return plan, discharge, exported, revenue, _short
 
 def optimize(vehicle_id, soc_pct, target_pct, dest_id, window_h, v2g_on, start_hour,
-             deg_on=False):
+             deg_on=False, eco=False):
     veh = VEHICLES[vehicle_id]
     dest = next(d for d in DESTINATIONS if d["id"] == dest_id)
     soc = max(0.0, min(1.0, soc_pct / 100.0))
@@ -165,15 +143,17 @@ def optimize(vehicle_id, soc_pct, target_pct, dest_id, window_h, v2g_on, start_h
         if can_v2g:
             plan, discharge, exported, v2g_revenue, shortfall = _v2g_plan(
                 start_hour, window_h, kwh_per_hour, kwh_needed, st["markup"],
-                veh["battery"], soc_on_arrival * veh["battery"], 0.30, 0.92)
+                veh["battery"], soc_on_arrival * veh["battery"], V2G_RESERVE, V2G_EFFICACITE)
             if shortfall > 0:  # window too short for charge + export — fall back to V1G
                 plan, _ = _cheapest_hours(
-                    start_hour, window_h, kwh_per_hour, kwh_needed, st["markup"])
+                    start_hour, window_h, kwh_per_hour, kwh_needed, st["markup"],
+                    eco=eco, start_hour=start_hour)
                 discharge, exported, v2g_revenue = {h: 0.0 for h in plan}, 0.0, 0.0
                 can_v2g = False
         else:
             plan, _ = _cheapest_hours(
-                start_hour, window_h, kwh_per_hour, kwh_needed, st["markup"])
+                start_hour, window_h, kwh_per_hour, kwh_needed, st["markup"],
+                eco=eco, start_hour=start_hour)
             discharge, exported, v2g_revenue = {h: 0.0 for h in plan}, 0.0, 0.0
 
         # --- Load-orchestrator power modulation --------------------------------
@@ -253,7 +233,6 @@ def optimize(vehicle_id, soc_pct, target_pct, dest_id, window_h, v2g_on, start_h
         "options": results,
     }
 
-
 # ---------------------------------------------------------------------------
 # Live session simulator (10-minute ticks)
 # ---------------------------------------------------------------------------
@@ -272,7 +251,6 @@ def start_session(opt_result, soc_pct=40.0):
     }
     return {"session_id": sid, "station": rec["station"], "vehicle": opt_result["vehicle"]}
 
-
 def _session_state(s):
     last = s["log"][-1] if s["log"] else {"kw": 0.0, "mode": "idle", "price": 0.0}
     return {"soc_pct": round(s["soc_pct"], 1), "spent": round(s["spent"], 2),
@@ -283,7 +261,6 @@ def _session_state(s):
             "progress": round(100 * (s["idx"] + s["tick"] / 6.0) / max(1, len(s["timeline"])), 1),
             "hour": s["timeline"][min(s["idx"], len(s["timeline"]) - 1)]["h"] if s["timeline"] else 0,
             "log": s["log"][-40:]}
-
 
 def step_session(sid):
     s = SESSIONS.get(sid)
@@ -321,28 +298,32 @@ def step_session(sid):
             s["done"] = True
     return {"done": False, **_session_state(s)}
 
-
 # ---------------------------------------------------------------------------
 # Value stacking — the 4 Guidehouse T2G business models
 # ---------------------------------------------------------------------------
 
-def value_stack(fleet_size, v2g_share_pct, kwh_per_vehicle_day=15.0):
+def value_stack(fleet_size, v2g_share_pct, kwh_per_vehicle_day=None):
+    B = BUSINESS
+    kwh_per_vehicle_day = kwh_per_vehicle_day or B["kwh_par_vehicule_jour"]
     v2g_vehicles = fleet_size * v2g_share_pct / 100.0
     total_kwh_day = fleet_size * kwh_per_vehicle_day
 
     # 4.2 Charging Service Provider — margin on energy sold + session fees
-    csp = total_kwh_day * 0.08 * 365 + fleet_size * 0.5 * 365
+    csp = total_kwh_day * B["marge_csp_eur_par_kwh"] * 365 + \
+          fleet_size * B["frais_session_annuel_par_vehicule"]
 
     # 4.1 Infrastructure Developer — utilisation fee collected per kWh
-    infra = total_kwh_day * 0.02 * 365
+    infra = total_kwh_day * B["frais_infrastructure_eur_par_kwh"] * 365
 
     # 4.3 Load Orchestrator — V2G arbitrage + frequency-regulation capacity payments
-    arbitrage = v2g_vehicles * 10.0 * 0.20 * 0.92 * 365 * 0.85     # 10 kWh cycled/day
-    capacity = v2g_vehicles * 7.0 * 15.0                            # 7 kW enrolled @ 15 €/kW-yr
+    arbitrage = (v2g_vehicles * B["kwh_cycle_v2g_par_jour"] * B["spread_v2g_eur_par_kwh"]
+                 * B["efficacite_v2g"] * 365 * B["utilisation_v2g"])
+    capacity = v2g_vehicles * B["kw_inscrits_par_vehicule"] * B["paiement_capacite_eur_par_kw_an"]
     orchestrator = arbitrage + capacity
 
     # 4.4 Mobility Provider — MaaS subscription on the fleet
-    maas = fleet_size * 0.35 * 12 * 0.30 * 12                       # 35% attach, 30% margin
+    maas = (fleet_size * B["attach_maaS"] * 12 * B["marge_maaS"]
+            * B["abonnement_maaS_eur_mois"])
 
     models = [
         {"model": "Infrastructure Developer", "revenue": round(infra),
@@ -360,28 +341,27 @@ def value_stack(fleet_size, v2g_share_pct, kwh_per_vehicle_day=15.0):
             "per_vehicle_year": round(total / max(1, fleet_size)),
             "stacking_bonus_pct": round(100 * (total - csp) / max(1, csp))}
 
-
 # ---------------------------------------------------------------------------
 # Grid orchestration analytics — dumb vs smart vs V2G load profiles
 # ---------------------------------------------------------------------------
 
 def grid_profile(fleet_size, v2g_share_pct, kwh_per_vehicle_day=15.0):
+    G = GRID
     dumb = [0.0] * 24
     smart = [0.0] * 24
     e = kwh_per_vehicle_day
-    p_max = 11.0  # home/work AC power per vehicle
+    p_max = G["p_charge_domicile_kw"]
 
     # --- Dumb charging: plug in and charge at full power immediately ---
-    # 70% arrive at 18:00 (evening peak), 30% at 08:00 (morning peak)
-    n_evening = fleet_size * 0.70
-    n_morning = fleet_size * 0.30
+    n_evening = fleet_size * G["part_soir"]
+    n_morning = fleet_size * G["part_matin"]
     dumb[18] += n_evening * p_max                       # full power hour 1
     dumb[19] += n_evening * max(0.0, (e - p_max)) / 1.0  # remainder of the session
     dumb[8] += n_morning * p_max
     dumb[9] += n_morning * max(0.0, (e - p_max)) / 1.0
 
     # --- Smart orchestration: same energy, spread over the night valley 01-07 ---
-    valley_hours = 7
+    valley_hours = G["heures_vallee"]
     base_kw_per_veh = e / valley_hours
     for h in range(1, 1 + valley_hours):
         smart[h] += fleet_size * base_kw_per_veh
@@ -389,9 +369,10 @@ def grid_profile(fleet_size, v2g_share_pct, kwh_per_vehicle_day=15.0):
     # V2G fleet discharges into the evening peak 18-20 (negative load),
     # then recharges the exported energy inside the valley.
     v2g_n = fleet_size * v2g_share_pct / 100.0
+    p_dis = G["p_decharge_v2g_kw"]
     for h in range(18, 21):
-        smart[h] -= v2g_n * 3.3          # ~3.3 kW discharge per vehicle
-    recharge_kw = v2g_n * 3.3 * 3 / valley_hours
+        smart[h] -= v2g_n * p_dis        # discharge per vehicle (V2G)
+    recharge_kw = v2g_n * p_dis * 3 / valley_hours
     for h in range(1, 1 + valley_hours):
         smart[h] += recharge_kw
 
@@ -404,27 +385,14 @@ def grid_profile(fleet_size, v2g_share_pct, kwh_per_vehicle_day=15.0):
                 "peak_dumb_kw": round(peak_dumb, 1),
                 "peak_smart_kw": round(peak_smart, 1),
                 "peak_reduction_pct": round(100 * (peak_dumb - peak_smart) / peak_dumb, 1),
-                "v2g_discharge_kw": round(v2g_n * 3.3, 1),
+                "v2g_discharge_kw": round(v2g_n * GRID["p_decharge_v2g_kw"], 1),
             }}
-
 
 # ---------------------------------------------------------------------------
 # Charging-station economics — CAPEX / OPEX / break-even
 # ---------------------------------------------------------------------------
 
-CHARGER_TYPES = {
-    "AC7":   {"kw": 7,   "capex": 3500,   "opex": 300,
-              "label": {"fr": "CA 7 kW — domicile / copropriété", "en": "AC 7 kW — home / apartment block"}},
-    "AC22":  {"kw": 22,  "capex": 9000,   "opex": 500,
-              "label": {"fr": "CA 22 kW — parking / entreprise", "en": "AC 22 kW — car park / business"}},
-    "DC50":  {"kw": 50,  "capex": 45000,  "opex": 3000,
-              "label": {"fr": "DC 50 kW — urbain", "en": "DC 50 kW — urban"}},
-    "DC150": {"kw": 150, "capex": 95000,  "opex": 5500,
-              "label": {"fr": "DC 150 kW — autoroute", "en": "DC 150 kW — highway"}},
-}
-
-
-def break_even(charger="DC50", utilization_pct=8.0, margin_ct=12.0):
+def break_even(charger="DC50", utilization_pct=8.0, margin_ct=12.0, lang="fr"):
     """Return the economics of one charging point.
     CAPEX = hardware + installation + grid connection; OPEX = maintenance + rent.
     Revenue = energy dispensed x margin."""
@@ -433,78 +401,70 @@ def break_even(charger="DC50", utilization_pct=8.0, margin_ct=12.0):
     revenue = kwh_year * margin_ct / 100.0
     profit = revenue - ct["opex"]
     payback = round(ct["capex"] / profit, 1) if profit > 0 else None
+    label = ct["label"][lang] if isinstance(ct["label"], dict) else ct["label"]
     return {
-        "charger": charger, "label": ct["label"],
+        "charger": charger, "label": label,
         "kw": ct["kw"], "capex": ct["capex"], "opex": ct["opex"],
         "utilization_pct": utilization_pct, "margin_ct": margin_ct,
         "kwh_year": round(kwh_year), "revenue_year": round(revenue),
         "profit_year": round(profit), "payback_years": payback,
     }
 
+# ---------------------------------------------------------------------------
+# Retours d'expérience — comparaison par pays (parts réelles Our World in Data)
+# ---------------------------------------------------------------------------
+
 
 # ---------------------------------------------------------------------------
-# Retours d'expérience — country comparison (illustrative figures, 2023-2024)
+# Occupation des bornes — état évolutif (arrivées / départs de véhicules)
 # ---------------------------------------------------------------------------
 
-COUNTRIES = [
-    {"share": 90,
-     "country": {"fr": "Norvège", "en": "Norway"},
-     "v2g": {"fr": "Projets pilotes (Nuvve, Fermata) ; réseau déjà très flexible (hydro)",
-             "en": "Pilot projects (Nuvve, Fermata); grid already very flexible (hydro)"},
-     "actors": {"fr": "Zaptec, Fortum Charge & Drive, Easee", "en": "Zaptec, Fortum Charge & Drive, Easee"},
-     "policy": {"fr": "Exonérations fiscales totales, péages et parking gratuits pour les VE",
-                "en": "Full tax exemptions, free tolls and parking for EVs"}},
-    {"share": 42,
-     "country": {"fr": "Pays-Bas", "en": "Netherlands"},
-     "v2g": {"fr": "Leader de l'orchestration : Jedlix ↔ TenneT, pilotes V2G à grande échelle",
-             "en": "Orchestration leader: Jedlix ↔ TenneT, large-scale V2G pilots"},
-     "actors": {"fr": "Jedlix, Elaad, Shell Recharge (ex-NewMotion)", "en": "Jedlix, Elaad, Shell Recharge (ex-NewMotion)"},
-     "policy": {"fr": "Congestion du réseau = forte rémunération de la flexibilité",
-                "en": "Grid congestion = high remuneration of flexibility"}},
-    {"share": 26,
-     "country": {"fr": "France", "en": "France"},
-     "v2g": {"fr": "Elli Flex / Mobilize pilots ; réseau nucléaire = CO2 déjà bas",
-             "en": "Elli Flex / Mobilize pilots; nuclear grid = already low CO2"},
-     "actors": {"fr": "Electra, Renault Mobilize, Freshmile, Ionity", "en": "Electra, Renault Mobilize, Freshmile, Ionity"},
-     "policy": {"fr": "Bonus écologique, Le décret bornes, éco-PTZ",
-                "en": "Purchase bonus, charging-point decree, eco-loan"}},
-    {"share": 24,
-     "country": {"fr": "Allemagne", "en": "Germany"},
-     "v2g": {"fr": "Pionnier ISO 15118-20 (Plug & Charge + bidirectionnel) ; loi Solarpaket 2024",
-             "en": "ISO 15118-20 pioneer (Plug & Charge + bidirectional); Solarpaket law 2024"},
-     "actors": {"fr": "Elli (VW), EnBW, Plugsurfing, Sonnet", "en": "Elli (VW), EnBW, Plugsurfing, Sonnet"},
-     "policy": {"fr": "Subventions KfW, dynamique solaire + batteries domestiques",
-                "en": "KfW subsidies, home solar + battery dynamics"}},
-    {"share": 25,
-     "country": {"fr": "États-Unis (Californie)", "en": "United States (California)"},
-     "v2g": {"fr": "Bus scolaires V2G (Nuvve) ; FERC 2222 ouvre les marchés DER",
-             "en": "V2G school buses (Nuvve); FERC 2222 opens DER markets"},
-     "actors": {"fr": "Tesla Supercharger, EVgo, ChargePoint, Fermata", "en": "Tesla Supercharger, EVgo, ChargePoint, Fermata"},
-     "policy": {"fr": "Crédits d'impôt IRA, mandats ZEV de l'État",
-                "en": "IRA tax credits, state ZEV mandates"}},
-    {"share": 37,
-     "country": {"fr": "Chine", "en": "China"},
-     "v2g": {"fr": "Pilotes V2G à Shanghai ; échange de batteries (NIO) comme alternative",
-             "en": "V2G pilots in Shanghai; battery swapping (NIO) as an alternative"},
-     "actors": {"fr": "NIO, BYD, TELD (plus grand réseau mondial)", "en": "NIO, BYD, TELD (largest network worldwide)"},
-     "policy": {"fr": "Crédits NEV, déploiement DC massif soutenu par l'État",
-                "en": "NEV credits, state-backed massive DC rollout"}},
-]
+_OCC = {"ratio": {}, "last": {}}
+
+
+def _tick_occupancy(hour):
+    """Fait évoluer l'occupation des bornes à chaque appel (arrivées/départs).
+
+    Chaque borne suit une marche aléatoire rappelée vers le régime jour/nuit et
+    plafonnée. Si un tick ne change aucune valeur (petites capacités + arrondi),
+    un mouvement est forcé : l'état reste vivant par construction.
+    """
+    import random
+    in_day = OCCUPATION["heures_jour_debut"] <= hour < OCCUPATION["heures_jour_fin"]
+    target = OCCUPATION["taux_jour"] if in_day else OCCUPATION["taux_nuit"]
+    var = OCCUPATION["variation_par_appel"]
+    rappel = OCCUPATION["rappel_vers_regime"]
+    cap = OCCUPATION["plafond"]
+
+    for st in STATIONS:
+        r = _OCC["ratio"].get(st["id"], target)
+        r += random.uniform(-var, var) + (target - r) * rappel
+        _OCC["ratio"][st["id"]] = max(0.0, min(cap, r))
+
+    snap = {st["id"]: int(round(st["slots"] * _OCC["ratio"][st["id"]])) for st in STATIONS}
+    if snap == _OCC["last"]:
+        for st in random.sample(STATIONS, len(STATIONS)):
+            cur, slots = snap[st["id"]], st["slots"]
+            if cur < slots:                       # une voiture arrive
+                snap[st["id"]] = cur + 1
+                _OCC["ratio"][st["id"]] = (cur + 1) / slots
+                break
+            if cur > 0:                           # une voiture part
+                snap[st["id"]] = cur - 1
+                _OCC["ratio"][st["id"]] = (cur - 1) / slots
+                break
+    _OCC["last"] = snap
+    return snap
 
 
 def live():
-    """Snapshot for the live ticker + station occupancy (changes on every call)."""
-    import random
+    """Snapshot for the live ticker + station occupancy (evolves on every call)."""
     import datetime
     h = datetime.datetime.now().hour
-    busy = 0.55 if 8 <= h <= 20 else 0.20
-    stations = []
-    for st in STATIONS:
-        occ = int(round(st["slots"] * min(0.95, busy * random.uniform(0.6, 1.2))))
-        stations.append({"id": st["id"], "occupied": occ, "free": max(0, st["slots"] - occ),
-                         "slots": st["slots"]})
-    return {"hour": h, "price": SPOT_PRICES[h], "co2": CO2_INTENSITY[h], "stations": stations}
-
+    occ = _tick_occupancy(h)
+    stations = [{"id": st["id"], "occupied": occ[st["id"]], "free": st["slots"] - occ[st["id"]],
+                 "slots": st["slots"]} for st in STATIONS]
+    return {"hour": h, "price": SPOT_PRICES[h], "co2": CO2_INTENSITY[h], "solar": SOLAR[h], "stations": stations}
 
 # ---------------------------------------------------------------------------
 # Trip planner — "do I need a charging stop on the way?"
@@ -526,7 +486,7 @@ def plan_trip(vehicle_id, soc_pct, origin_id, dest_id, target_pct=80.0):
 
     res = {"vehicle": veh["name"], "origin": o["name"], "destination": d["name"],
            "distance_km": round(dist, 1), "energy_kwh": round(e_trip, 1),
-           "direct": arrival >= 0.10,
+           "direct": arrival >= TRIP["reserve_arrivee"],
            "arrival_soc_pct": round(100 * arrival, 1), "stops": []}
 
     if res["direct"]:
@@ -540,10 +500,10 @@ def plan_trip(vehicle_id, soc_pct, origin_id, dest_id, target_pct=80.0):
         d1 = math.hypot(st["x"] - o["x"], st["y"] - o["y"])
         d2 = math.hypot(d["x"] - st["x"], d["y"] - st["y"])
         soc_stop = soc - d1 * cons / batt
-        if soc_stop < 0.10:                    # cannot even reach the station
+        if soc_stop < TRIP["reserve_arrivee"]:  # cannot even reach the station
             continue
         arrival_final = target - d2 * cons / batt
-        if arrival_final < 0.10:               # would not reach destination after stop
+        if arrival_final < TRIP["reserve_arrivee"]:  # would not reach destination after stop
             continue
         kwh = (target - soc_stop) * batt
         duration, _ = sim_charge_hours(soc_stop * batt, target * batt,
@@ -559,6 +519,85 @@ def plan_trip(vehicle_id, soc_pct, origin_id, dest_id, target_pct=80.0):
     res["found"] = bool(res["stops"])
     return res
 
+# ---------------------------------------------------------------------------
+# Orchestrateur multi-VE sur un site — répartition d une puissance limitée
+# (le scénario : N véhicules partagent une connexion de puissance cap_kw)
+# ---------------------------------------------------------------------------
+
+NOMINAL_PAR_VE = SITE_CFG["nominal_par_ve_kw"]  # lu depuis data/hypotheses.json
+
+def orchestrate_site(vehicles, cap_kw, window_h):
+    """Répartit une puissance limitée (cap_kw) entre plusieurs véhicules.
+
+    vehicles : [{"name", "battery", "soc"(%), "target"(%), "departure_h"(heures
+    après le début de la fenêtre)}]. Algorithme : à chaque heure, les véhicules
+    actifs reçoivent une puissance proportionnelle à leur urgence
+    (besoin restant / heures restantes), plafonnée au cap du site et à leur
+    puissance nominale. Retour : courbe de charge du site + résultat par véhicule.
+    """
+    cap_kw = max(1.0, float(cap_kw))
+    window_h = max(1, min(24, int(window_h)))
+    state = []
+    for i, v in enumerate(vehicles):
+        batt = max(1.0, float(v.get("battery", 60)))
+        soc = max(0.0, min(100.0, float(v.get("soc", 40))))
+        target = max(soc, min(100.0, float(v.get("target", 80))))
+        state.append({
+            "name": v.get("name", f"VE {i + 1}"),
+            "battery": batt,
+            "soc0_pct": round(soc, 1),
+            "soc_kwh": batt * soc / 100.0,
+            "target_kwh": batt * target / 100.0,
+            "need_kwh": round(max(0.0, batt * (target - soc) / 100.0), 1),
+            "dep": max(1, min(window_h, int(v.get("departure_h", window_h)))),
+            "delivered": 0.0,
+            "schedule": [0.0] * window_h,
+        })
+
+    site_curve = [0.0] * window_h
+    for h in range(window_h):
+        active = [v for v in state if v["dep"] > h and v["soc_kwh"] < v["target_kwh"]]
+        if not active:
+            continue
+        demands, urgencies = [], []
+        for v in active:
+            need = v["target_kwh"] - v["soc_kwh"]
+            ideal = min(need, NOMINAL_PAR_VE)
+            urgency = need / max(1.0, v["dep"] - h)
+            demands.append((v, ideal, urgency))
+            urgencies.append(urgency)
+        total = sum(d[1] for d in demands)
+        if total <= cap_kw:
+            allocations = [(v, ideal) for v, ideal, _ in demands]
+        else:
+            urg_total = sum(urgencies)
+            allocations = [(v, min(ideal, cap_kw * urg / urg_total))
+                           for v, ideal, urg in demands]
+        hour_total = 0.0
+        for v, alloc in allocations:
+            v["soc_kwh"] += alloc
+            v["delivered"] += alloc
+            v["schedule"][h] = round(alloc, 2)
+            hour_total += alloc
+        site_curve[h] = round(hour_total, 2)
+
+    results = []
+    served = 0
+    for v in state:
+        met = v["soc_kwh"] >= v["target_kwh"] - 0.01
+        served += 1 if met else 0
+        results.append({
+            "name": v["name"], "soc0_pct": v["soc0_pct"],
+            "soc_final_pct": round(100 * v["soc_kwh"] / v["battery"], 1),
+            "need_kwh": v["need_kwh"], "delivered_kwh": round(v["delivered"], 1),
+            "departure_h": v["dep"], "target_met": met,
+            "schedule": v["schedule"],
+        })
+    return {
+        "cap_kw": cap_kw, "window_h": window_h,
+        "site_curve": site_curve, "site_peak_kw": round(max(site_curve), 2) if site_curve else 0.0,
+        "vehicles": results, "served": served, "total": len(results),
+    }
 
 # ---------------------------------------------------------------------------
 # Session registry — vehicles currently connected to the platform
@@ -576,3 +615,125 @@ def list_sessions():
             "spent": round(s["spent"], 2), "earned": round(s["earned"], 2),
         })
     return {"count": len(out), "sessions": out}
+
+
+# ---------------------------------------------------------------------------
+# Orchestrateur de flotte — planification 24 h sous plafond de site
+# (utilise la vraie courbe de prix data/prix_spot.json + solaire RTE)
+# ---------------------------------------------------------------------------
+
+def site_optimal(vehicles, cap_kw, eco=False, v2g_enabled=True, window_h=24, start_hour=None):
+    """Optimiseur de flotte : planifie la recharge et la décharge V2G de N véhicules
+    sur la vraie courbe de prix, sous un plafond de puissance de site.
+
+    vehicles : [{"veh_id" (id dans data/vehicules.json), "soc" (%), "target" (%),
+                 "departure_h" (heures avant le départ)}]
+    Retour : plannings par véhicule, courbe du site, coûts/revenus, KPIs.
+    """
+    import datetime as _dt
+    h0 = int(start_hour) if start_hour is not None else _dt.datetime.now(_dt.timezone.utc).hour
+    window_h = max(2, min(48, int(window_h)))
+    cap_kw = max(1.0, float(cap_kw))
+    RES, EFF = V2G_RESERVE, V2G_EFFICACITE
+    eco_bonus = ECO_CFG["bonus_solaire_eur_par_kwh_max"] if eco else 0.0
+
+    hours = list(range(window_h))
+    price = [SPOT_PRICES[(h0 + h) % 24] for h in hours]
+    solar = [SOLAR[(h0 + h) % 24] for h in hours]
+    eff_price = [round(p - (s / 100.0) * eco_bonus, 4) for p, s in zip(price, solar)]
+
+    state = []
+    for i, v in enumerate(vehicles):
+        spec = VEHICLES.get(v.get("veh_id"), list(VEHICLES.values())[0])
+        batt = max(1.0, float(spec["battery"]))
+        soc = min(100.0, max(0.0, float(v.get("soc", 40))))
+        target = min(100.0, max(soc, float(v.get("target", 80))))
+        dep = max(1, min(window_h, int(v.get("departure_h", window_h))))
+        v2g_ok = v2g_enabled and bool(spec.get("v2g", False))
+        state.append({
+            "idx": i, "name": spec["name"], "veh_id": v.get("veh_id"),
+            "battery": batt, "nominal": min(float(spec["max_kw"]), 50.0),
+            "soc0_pct": round(soc * 100, 1), "soc_kwh": batt * soc / 100.0,
+            "target_kwh": batt * target / 100.0,
+            "need_kwh": round(max(0.0, batt * (target - soc) / 100.0), 1),
+            "dep": dep, "v2g_ok": v2g_ok,
+            "sched_c": [0.0] * window_h, "sched_d": [0.0] * window_h,
+        })
+
+    # --- Phase 1 : V2G — décharge aux heures les plus chères avant le départ ---
+    for v in state:
+        if not v["v2g_ok"]:
+            continue
+        # garde physique : export limité par la réserve ET par la capacité de
+        # recharge restante (le véhicule doit finir à sa cible avant le départ)
+        exportable = min(v["soc_kwh"] - RES * v["battery"],
+                         (v["battery"] - v["soc_kwh"]) * EFF) - v["need_kwh"]
+        if exportable <= 0:
+            continue
+        p_dis = min(11.0, v["nominal"])
+        rem = exportable
+        for h in sorted(range(v["dep"]), key=lambda hh: -price[hh]):
+            if rem <= 0:
+                break
+            take = min(p_dis, rem)
+            v["sched_d"][h] += take
+            v["soc_kwh"] -= take
+            rem -= take
+
+    # --- Phase 2 : recharge — heures les moins chères (prix effectif), plafond de site ---
+    remaining = [v["need_kwh"] + sum(v["sched_d"]) / EFF for v in state]
+    for v, r in zip(state, remaining):
+        r = r  # Remaining est manipulé via la liste ci-dessus
+    for h in sorted(hours, key=lambda hh: eff_price[hh]):
+        cap_left = cap_kw + sum(v["sched_d"][h] for v in state)  # la décharge libère du cap
+        actives = [i for i, v in enumerate(state)
+                   if h < v["dep"] and remaining[i] > 0.01]
+        actives.sort(key=lambda i: -remaining[i])
+        for i in actives:
+            v = state[i]
+            room = max(0.0, v["battery"] - v["soc_kwh"])
+            alloc = min(v["nominal"], remaining[i], max(0.0, cap_left), room)
+            if alloc <= 0:
+                continue
+            v["sched_c"][h] += round(alloc, 2)
+            v["soc_kwh"] += alloc
+            remaining[i] -= alloc
+            cap_left -= alloc
+            if cap_left <= 0:
+                break
+
+    # --- Résultats ---
+    results, served = [], 0
+    tot_cost = tot_rev = 0.0
+    site_c = [round(sum(v["sched_c"][h] for v in state), 2) for h in hours]
+    site_d = [round(sum(v["sched_d"][h] for v in state), 2) for h in hours]
+    for v in state:
+        charged = sum(v["sched_c"])
+        exported = sum(v["sched_d"])
+        cost = sum(v["sched_c"][h] * (price[h]) for h in hours)
+        rev = sum(v["sched_d"][h] * (price[h]) * EFF for h in hours)
+        met = remaining[v["idx"]] <= 0.01
+        served += 1 if met else 0
+        tot_cost += cost
+        tot_rev += rev
+        results.append({
+            "name": v["name"], "veh_id": v["veh_id"], "soc0_pct": v["soc0_pct"],
+            "soc_final_pct": round(100 * min(v["battery"], v["soc_kwh"]) / v["battery"], 1),
+            "need_kwh": v["need_kwh"], "charged_kwh": round(charged, 1),
+            "departure_h": v["dep"], "target_met": met,
+            "exported_kwh": round(exported, 1), "v2g_revenue": round(rev, 2),
+            "cost": round(cost, 2), "net": round(cost - rev, 2),
+            "sched_c": v["sched_c"], "sched_d": v["sched_d"],
+        })
+    peak_net = round(max(site_c[h] - site_d[h] for h in hours), 2)
+    return {
+        "cap_kw": cap_kw, "window_h": window_h, "start_hour": h0,
+        "prices": price, "eff_prices": eff_price, "solar": solar,
+        "vehicles": results, "served": served, "total": len(results),
+        "site_charge": site_c, "site_discharge": site_d,
+        "peak_charge_kw": round(max(site_c), 2) if site_c else 0.0,
+        "peak_net_kw": peak_net,
+        "total_cost": round(tot_cost, 2), "total_v2g_revenue": round(tot_rev, 2),
+        "net_cost": round(tot_cost - tot_rev, 2),
+        "source": SOURCES["prix"],
+    }

@@ -1,0 +1,53 @@
+{
+ "source": "coordonnées réelles (OpenStreetMap), converties en grille km 0-20 (centre : Île de la Cité)",
+ "destinations": [
+  {
+   "id": "d1",
+   "name": "Gare du Nord",
+   "x": 10.46,
+   "y": 13.1,
+   "osm_lat": 48.8809,
+   "osm_lon": 2.3553
+  },
+  {
+   "id": "d2",
+   "name": "La Défense",
+   "x": 1.89,
+   "y": 14.32,
+   "osm_lat": 48.8919,
+   "osm_lon": 2.2381
+  },
+  {
+   "id": "d3",
+   "name": "Tour Eiffel",
+   "x": 6.02,
+   "y": 10.6,
+   "osm_lat": 48.8584,
+   "osm_lon": 2.2945
+  },
+  {
+   "id": "d4",
+   "name": "Quartier Latin (Sorbonne)",
+   "x": 9.6,
+   "y": 9.58,
+   "osm_lat": 48.8492,
+   "osm_lon": 2.3435
+  },
+  {
+   "id": "d5",
+   "name": "Gare de Lyon",
+   "x": 11.85,
+   "y": 9.03,
+   "osm_lat": 48.8443,
+   "osm_lon": 2.3743
+  },
+  {
+   "id": "d6",
+   "name": "Porte de Versailles",
+   "x": 5.39,
+   "y": 7.4,
+   "osm_lat": 48.8296,
+   "osm_lon": 2.2859
+  }
+ ]
+}

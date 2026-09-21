@@ -1,0 +1,53 @@
+{
+ "source": "spécifications constructeurs / ev-database.org (2024) — données réelles",
+ "vehicules": [
+  {
+   "id": "zoe",
+   "name": "Renault Zoe R135",
+   "battery": 52,
+   "max_kw": 46,
+   "cons": 0.17,
+   "v2g": false
+  },
+  {
+   "id": "leaf",
+   "name": "Nissan Leaf e+",
+   "battery": 62,
+   "max_kw": 50,
+   "cons": 0.17,
+   "v2g": true
+  },
+  {
+   "id": "id4",
+   "name": "VW ID.4 Pro",
+   "battery": 77,
+   "max_kw": 125,
+   "cons": 0.19,
+   "v2g": true
+  },
+  {
+   "id": "model3",
+   "name": "Tesla Model 3 LR",
+   "battery": 75,
+   "max_kw": 250,
+   "cons": 0.16,
+   "v2g": false
+  },
+  {
+   "id": "kangoo",
+   "name": "Renault Kangoo E-Tech (flotte)",
+   "battery": 45,
+   "max_kw": 80,
+   "cons": 0.21,
+   "v2g": true
+  },
+  {
+   "id": "ebus",
+   "name": "Bus électrique urbain (HD)",
+   "battery": 300,
+   "max_kw": 150,
+   "cons": 1.1,
+   "v2g": true
+  }
+ ]
+}

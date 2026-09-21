@@ -1,0 +1,110 @@
+[
+ {
+  "country": {
+   "fr": "Norvège",
+   "en": "Norway"
+  },
+  "v2g": {
+   "fr": "Projets pilotes (Nuvve, Fermata) ; réseau hydro déjà flexible",
+   "en": "Pilot projects (Nuvve, Fermata); hydro grid already flexible"
+  },
+  "actors": {
+   "fr": "Zaptec, Fortum Charge & Drive, Easee",
+   "en": "Zaptec, Fortum Charge & Drive, Easee"
+  },
+  "policy": {
+   "fr": "Exonérations fiscales, péages et parking avantageux",
+   "en": "Tax exemptions, favorable tolls and parking"
+  }
+ },
+ {
+  "country": {
+   "fr": "Pays-Bas",
+   "en": "Netherlands"
+  },
+  "v2g": {
+   "fr": "Leader de l orchestration : Jedlix <-> TenneT, pilotes V2G à grande échelle",
+   "en": "Orchestration leader: Jedlix <-> TenneT, large-scale V2G pilots"
+  },
+  "actors": {
+   "fr": "Jedlix, Elaad, Shell Recharge (ex-NewMotion)",
+   "en": "Jedlix, Elaad, Shell Recharge (ex-NewMotion)"
+  },
+  "policy": {
+   "fr": "Congestion du réseau = flexibilité fortement valorisée",
+   "en": "Grid congestion = highly valued flexibility"
+  }
+ },
+ {
+  "country": {
+   "fr": "Chine",
+   "en": "China"
+  },
+  "v2g": {
+   "fr": "Pilotes V2G à Shanghai ; échange de batteries (NIO) comme alternative",
+   "en": "V2G pilots in Shanghai; battery swapping (NIO) as an alternative"
+  },
+  "actors": {
+   "fr": "NIO, BYD, TELD (plus grand réseau mondial)",
+   "en": "NIO, BYD, TELD (largest network worldwide)"
+  },
+  "policy": {
+   "fr": "Crédits NEV, déploiement DC massif soutenu par l État",
+   "en": "NEV credits, state-backed massive DC rollout"
+  }
+ },
+ {
+  "country": {
+   "fr": "Allemagne",
+   "en": "Germany"
+  },
+  "v2g": {
+   "fr": "Pionnier ISO 15118-20 (Plug and Charge + bidirectionnel) ; Solarpaket 2024",
+   "en": "ISO 15118-20 pioneer (Plug and Charge + bidirectional); Solarpaket 2024"
+  },
+  "actors": {
+   "fr": "Elli (VW), EnBW, Plugsurfing, Sonnet",
+   "en": "Elli (VW), EnBW, Plugsurfing, Sonnet"
+  },
+  "policy": {
+   "fr": "Subventions KfW, dynamique solaire + batteries domestiques",
+   "en": "KfW subsidies, home solar + battery dynamics"
+  }
+ },
+ {
+  "country": {
+   "fr": "France",
+   "en": "France"
+  },
+  "v2g": {
+   "fr": "Pilotes Elli Flex / Mobilize ; réseau nucléaire bas-carbone",
+   "en": "Elli Flex / Mobilize pilots; low-carbon nuclear grid"
+  },
+  "actors": {
+   "fr": "Electra, Renault Mobilize, Freshmile, Ionity",
+   "en": "Electra, Renault Mobilize, Freshmile, Ionity"
+  },
+  "policy": {
+   "fr": "Bonus écologique, décret bornes, éco-PTZ",
+   "en": "Purchase bonus, charging-point decree, eco-loan"
+  }
+ },
+ {
+  "country": {
+   "fr": "États-Unis",
+   "en": "United States"
+  },
+  "v2g": {
+   "fr": "Bus scolaires V2G (Nuvve) ; FERC 2222 ouvre les marchés DER",
+   "en": "V2G school buses (Nuvve); FERC 2222 opens DER markets"
+  },
+  "actors": {
+   "fr": "Tesla Supercharger, EVgo, ChargePoint, Fermata",
+   "en": "Tesla Supercharger, EVgo, ChargePoint, Fermata"
+  },
+  "policy": {
+   "fr": "Crédits d impôt IRA, mandats ZEV des États",
+   "en": "IRA tax credits, state ZEV mandates"
+  }
+ }
+]

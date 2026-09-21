@@ -73,6 +73,7 @@
  #langSwitch { display: flex; gap: 4px; margin-left: 10px; }
  #langSwitch button { background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 7px; padding: 5px 11px; cursor: pointer; font-size: 12px; font-weight: 700; }
  #langSwitch button.active { background: var(--acc); color: #06281f; border-color: var(--acc); }
+ #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #7f1d1dee; border: 1px solid #ef4444; color: #fff; border-radius: 10px; padding: 10px 18px; font-size: 13px; font-weight: 600; display: none; z-index: 60; max-width: 90vw; text-align: center; }
 </style>
 </head>
 <body>
@@ -82,6 +83,7 @@
  <div id="liveTicker">
  <span class="tick pulse" id="tickPrice">—</span>
  <span class="tick" id="tickCo2">—</span>
+ <span class="tick" id="tickSolar">—</span>
  <span class="tick" id="tickHour">—</span>
  </div>
  <div id="langSwitch">
@@ -93,6 +95,7 @@
  <button data-tab="session">2 · Session en direct</button>
  <button data-tab="stack">3 · Modèles &amp; valeur</button>
  <button data-tab="grid">4 · Analyse réseau</button>
+    <button data-tab="sites">4b · Smart site</button>
  <button data-tab="fleet">5 · Flotte mobile</button>
  <button data-tab="exp">6 · Retours d'expérience</button>
  </nav>
@@ -117,6 +120,9 @@
  </label>
  <label style="display:flex;align-items:center;gap:8px;">
  <input type="checkbox" id="deg" style="width:auto;accent-color:var(--warn);"> <span data-i18n="degAllow">Inclure l'usure batterie V2G (≈ 0,07 €/kWh cyclé)</span>
+ </label>
+ <label style="display:flex;align-items:center;gap:8px;">
+ <input type="checkbox" id="eco" style="width:auto;accent-color:var(--good);"> <span data-i18n="ecoAllow">Mode éco : privilégier les heures solaires (RTE)</span>
  </label>
  <button class="btn" id="btnOptimize" style="width:100%;text-align:center;" data-i18n="btnOptimize">Optimiser le plan de recharge</button>
  <div class="note" data-i18n="optNote">Le moteur classe chaque borne selon <b>coût net + temps + détour</b>, planifie la recharge dans les créneaux horaires les moins chers et — si le V2G est activé — <b>revend l'énergie au réseau pendant le pic du soir</b>.</div>
@@ -317,6 +323,55 @@
  </div>
  </section>
 
+ <!-- ============ TAB 4b : SMART SITE ============ -->
+  <section id="tab-sites" class="tab">
+    <div class="grid2">
+      <div class="card">
+        <h3 data-i18n="siteTitle">Smart site — planification de flotte sur 24 h</h3>
+        <label><span data-i18n="siteCap">Limite de puissance du site</span> — <span class="val" id="siteCapVal">60 kW</span></label>
+        <input type="range" id="siteCap" min="11" max="150" value="60">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+          <input type="checkbox" id="siteV2G" checked style="width:auto;accent-color:var(--acc);"> <span data-i18n="siteV2G">V2G activé (décharge au pic)</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="siteEco" style="width:auto;accent-color:var(--good);"> <span data-i18n="siteEco">Mode éco (heures solaires)</span>
+        </label>
+        <h3 style="margin-top:14px;" data-i18n="siteFleet">Véhicules du site</h3>
+        <div id="siteCars"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px;">
+          <div style="flex:2;min-width:150px;"><label data-i18n="siteVeh">Véhicule</label><select id="siteVehSel"></select></div>
+          <div style="width:80px;"><label data-i18n="siteSoc0">SoC (%)</label><input type="number" id="siteVehSoc" value="40" min="5" max="95"></div>
+          <div style="width:100px;"><label data-i18n="siteDepart">Départ (h)</label><input type="number" id="siteVehDep" value="12" min="2" max="48"></div>
+          <button class="btn secondary" id="btnSiteAdd" style="margin-top:14px;" data-i18n="siteAdd">+ Ajouter</button>
+        </div>
+        <button class="btn" id="btnSiteOpt" style="width:100%;text-align:center;" data-i18n="siteRun24">Optimiser le site (24 h)</button>
+        <button class="btn secondary" id="btnSiteDemo" style="width:100%;text-align:center;" data-i18n="siteDemo">Flotte de démonstration (bus + VE)</button>
+      </div>
+      <div class="card">
+        <div class="kpi-row">
+          <div class="kpi"><div class="n" id="siteCost">—</div><div class="l" data-i18n="siteCostL">Coût énergie (spot)</div></div>
+          <div class="kpi"><div class="n" id="siteRev" style="color:var(--good)">—</div><div class="l" data-i18n="siteRevL">Revenus V2G</div></div>
+          <div class="kpi"><div class="n" id="sitePeak">—</div><div class="l" data-i18n="sitePeakNetL">Pic net du site</div></div>
+          <div class="kpi"><div class="n" id="siteServed">—</div><div class="l" data-i18n="siteServedL">Objectifs atteints</div></div>
+        </div>
+        <canvas id="siteChart" width="880" height="300"></canvas>
+        <div class="legend">
+          <span><span class="dot" style="background:#2dd4bf"></span>Charge (par véhicule)</span>
+          <span><span class="dot" style="background:#f87171"></span>Décharge V2G</span>
+          <span><span class="dot" style="background:#7c8cf8"></span>Prix réel €/kWh (courbe)</span>
+          <span><span class="dot" style="background:#f87171"></span>Plafond du site</span>
+        </div>
+        <table id="siteTable" style="margin-top:12px;">
+          <thead><tr><th data-i18n="thVehicle">Véhicule</th><th class="num" data-i18n="thSoc">SoC départ</th>
+            <th data-i18n="siteNeed">Besoin (kWh)</th><th class="num" data-i18n="siteDeliv">Livré (kWh)</th>
+            <th data-i18n="siteDepart">Départ</th><th class="num" data-i18n="siteRevL">Rev. V2G (€)</th>
+            <th class="num" data-i18n="siteNetL">Net (€)</th><th data-i18n="thStatus">Statut</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
  <!-- ============ TAB 5 : FLOTTE MOBILE ============ -->
  <section id="tab-fleet" class="tab">
  <div class="kpi-row">
@@ -371,8 +426,18 @@
  </section>
 
 </main>
-<div class="footer-note" data-i18n="footer">Prototype VoltHub T2G — données simulées pour démonstration académique · d'après le livre blanc Guidehouse T2G, EV Analytics (SAS/Intel) et Mobility Services (Navigant)</div>
+<div class="footer-note" data-i18n="footer">Prototype VoltHub T2G — données réelles : prix day-ahead Energy-Charts (Fraunhofer), CO₂ et solaire RTE éCO2mix, bornes OpenStreetMap, parts VE Our World in Data · d'après les livres blancs Guidehouse T2G, EV Analytics (SAS/Intel) et Mobility Services (Navigant)</div>
+<div id="toast" role="status" aria-live="polite"></div>
 
+
+<script>
+/* Self-test error capture (active only with #test in the URL) */
+if (location.hash === "#test") {
+  window.__errs = [];
+  window.addEventListener("error", function (e) { window.__errs.push("E:" + (e.message || "?")); });
+  window.addEventListener("unhandledrejection", function (e) { window.__errs.push("R:" + ((e.reason && e.reason.message) || e.reason || "?")); });
+}
+</script>
 
 <script>
 /* ================= state & helpers ================= */
@@ -384,10 +449,22 @@ let playing = false, playTimer = null;
 
 const $ = id => document.getElementById(id);
 const eur = v => (v < 0 ? "−" : "") + Math.abs(v).toFixed(2) + " €";
+const pct = v => (typeof v === "number" ? v : 0).toFixed(0) + "%";
 
 function api(path, body) {
  return fetch(path, body ? {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)}
- : {}).then(r => r.json());
+ : {}).then(r => r.json())
+ .catch(e => { toast(t("apiErr") + " — " + e.message); return {error: String(e.message)}; });
+}
+
+let toastTimer = null;
+function toast(msg) {
+ const el = $("toast");
+ if (!el) return;
+ el.textContent = msg;
+ el.style.display = "block";
+ clearTimeout(toastTimer);
+ toastTimer = setTimeout(() => { el.style.display = "none"; }, 5000);
 }
 
 /* tabs */
@@ -400,6 +477,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
  if (b.dataset.tab === "grid") loadGrid();
  if (b.dataset.tab === "exp") loadExp();
  if (b.dataset.tab === "fleet") fleetRender();
+ if (b.dataset.tab === "sites") renderCars();
  if (b.dataset.tab === "plan") { drawMap(); if (LAST_OPT && LAST_OPT.options.length) drawPlanChart(); }
 });
 
@@ -481,7 +559,8 @@ function params() {
  return {
  vehicle: $("vehicle").value, soc: +$("soc").value, target: +$("target").value,
  destination: $("destination").value, window: +$("window").value,
- start_hour: +$("startHour").value, v2g: $("v2g").checked, deg: $("deg").checked
+ start_hour: +$("startHour").value, v2g: $("v2g").checked, deg: $("deg").checked,
+    eco: $("eco").checked
  };
 }
 
@@ -489,6 +568,7 @@ async function optimize() {
  $("btnOptimize").disabled = true;
  LAST_OPT = await api("/api/optimize", params());
  $("btnOptimize").disabled = false;
+ if (!LAST_OPT || LAST_OPT.error) return;
  selectedIdx = 0;
  renderOptions();
  drawMap();
@@ -531,8 +611,8 @@ function renderOptions() {
 async function startSession() {
  const p = params();
  const res = await api("/api/session/start", p);
- if (res.error) { alert(res.error); return; }
- SESSION = res;
+ if (res.error) { toast(res.error); return; }
+ SESSION = {id: res.session_id, station: res.station, vehicle: res.vehicle};
  $("logTable").querySelector("tbody").innerHTML = "";
  $("sessInfo").textContent = fmt(t("dPlugged"), {st: res.station.name, v: res.vehicle.name});
  document.querySelector('nav button[data-tab="session"]').click();
@@ -640,6 +720,7 @@ function drawPlanChart() {
 async function loadStack() {
  const d = {fleet: +$("fleet").value, v2g_share: +$("v2gShare").value, kwh_day: +$("kwhDay").value};
  const r = await api("/api/valuestack", d);
+ if (!r || r.error) return;
  $("vsTotal").textContent = r.total.toLocaleString() + " €";
  $("vsPerVeh").textContent = r.per_vehicle_year.toLocaleString() + " €";
  $("vsBonus").textContent = "+" + r.stacking_bonus_pct + "%";
@@ -679,6 +760,7 @@ async function loadStack() {
 async function loadGrid() {
  const d = {fleet: +$("gFleet").value, v2g_share: +$("gShare").value};
  const r = await api("/api/grid", d);
+ if (!r || r.error) return;
  $("kDumb").textContent = r.kpi.peak_dumb_kw.toLocaleString() + " kW";
  $("kSmart").textContent = r.kpi.peak_smart_kw.toLocaleString() + " kW";
  $("kRed").textContent = "−" + r.kpi.peak_reduction_pct + "%";
@@ -817,8 +899,35 @@ const I18N = {
  btnFleetPlay: {en: "▶ Play the day"},
  btnFleetReset:{en: "Reset"},
  fleetNote: {en: "Each dot is one fleet vehicle (60 EVs). As highlighted in <i>Charging Ahead with EV Analytics</i> (SAS/Intel): EVs <b>move</b> — so the grid never has full visibility of their position. In the morning they drive to work (daytime top-up possible 12h–14h), evening activities, then back home; charging happens at night (price valley) and V2G-capable EVs <b>discharge into the 18h–21h peak</b>. This mobility is what makes T2G orchestration hard — and it is the problem the platform solves."},
- footer: {en: "VoltHub T2G prototype — simulated data for academic demonstration · based on the Guidehouse T2G white paper, EV Analytics (SAS/Intel) and Mobility Services (Navigant)"},
+ footer: {fr: "Prototype VoltHub T2G — données réelles : prix day-ahead Energy-Charts (Fraunhofer), CO₂ et solaire RTE éCO2mix, bornes OpenStreetMap, parts VE Our World in Data · d'après les livres blancs Guidehouse T2G, EV Analytics (SAS/Intel) et Mobility Services (Navigant)", en: "VoltHub T2G prototype — real data: day-ahead prices Energy-Charts (Fraunhofer), CO₂ and solar RTE éCO2mix, charging stations OpenStreetMap, EV shares Our World in Data · based on the Guidehouse T2G white paper, EV Analytics (SAS/Intel) and Mobility Services (Navigant)"},
  sessInfoDef: {fr: "Aucune session active — lancez l'optimiseur dans l'onglet 1 puis « Démarrer la session en direct ».", en: "No active session — run the optimizer in tab 1 then “Start live session”."},
+  ecoAllow: {en: "Eco mode: favor solar hours (real RTE solar share)"},
+  siteTitle: {en: "Smart site — power allocation between vehicles"},
+  siteVeh: {en: "Vehicle"},
+  siteSoc0: {en: "SoC (%)"},
+  siteDepart: {en: "Departure (h)"},
+  siteAdd: {en: "+ Add"},
+  siteRun24: {en: "Optimize the site (24 h)"},
+  siteDemo: {en: "Demo fleet (bus + EVs)"},
+  siteFleet: {en: "Site vehicles"},
+  siteCostL: {en: "Energy cost (spot)"},
+  siteRevL: {en: "V2G revenue"},
+  sitePeakNetL: {en: "Net site peak"},
+  siteServedL: {en: "Targets met"},
+  siteNetL: {en: "Net (€)"},
+  siteV2G: {en: "V2G enabled (peak discharge)"},
+  siteEco: {en: "Eco mode (solar hours)"},
+  siteCap: {en: "Site power limit (kW)"},
+  siteWin: {en: "Window (hours)"},
+  siteRun: {en: "Run allocation"},
+  sitePeak: {en: "Site peak (capped)"},
+  siteServed: {en: "Vehicles served"},
+  siteNeed: {en: "Need (kWh)"},
+  siteGen: {en: "Generate 4 vehicles"},
+  siteNote: {en: "Real scenario: several EVs share one site connection (kW limit). The orchestrator allocates power pro-rata to urgency — priority to the vehicle leaving first — never exceeding the cap."},
+  siteDeliv: {en: "Delivered (kWh)"},
+  siteOK: {fr: "objectif atteint", en: "target met"},
+  siteKO: {fr: "partiel", en: "partial"},
  degAllow: {en: "Include V2G battery wear (≈ €0.07/kWh cycled)"},
  dCo2: {fr: "{c} g CO₂ (−{p}% vs non piloté)", en: "{c} g CO₂ (−{p}% vs dumb)"},
  dDeg: {fr: "Usure batterie : {d} €", en: "Battery wear: {d} €"},
@@ -860,6 +969,7 @@ const I18N = {
  dResetMsg: {fr: "Lancez l'optimiseur dans l'onglet 1, puis « Démarrer la session en direct ».", en: "Run the optimizer in tab 1, then click “Start live session”."},
  dSocLabel: {fr: "niveau de charge", en: "state of charge"},
  dStartBtn: {fr: "Démarrer la session en direct (plan recommandé)", en: "Start live session (recommended plan)"},
+ apiErr: {fr: "Erreur de communication avec le serveur", en: "Server communication error"},
  dAxisYear: {fr: "€ / an", en: "€ / year"},
  dInsightV2G: {fr: "Pic du soir : {n} VE injectent {p} kW dans le réseau (centrale virtuelle mobile).", en: "Evening peak: {n} EVs inject {p} kW into the grid (mobile virtual power plant)."},
  marketBlock: {},
@@ -1108,6 +1218,7 @@ function refreshLive() {
  LIVE = d;
  $("tickPrice").innerHTML = "Prix : <b>" + d.price.toFixed(2) + " €/kWh</b>";
  $("tickCo2").innerHTML = "CO₂ : <b>" + d.co2 + " g/kWh</b>";
+    $("tickSolar").innerHTML = "Solaire : <b>" + (d.solar !== undefined ? d.solar.toFixed(0) + " %" : "—") + "</b>";
  $("tickHour").textContent = String(d.hour).padStart(2, "0") + "h00";
  drawMap();
  }).catch(() => {});
@@ -1270,13 +1381,129 @@ window.addEventListener("load", () => { refreshLive(); loadBreakEven(); loadSess
 </script>
 
 <script>
+/* ================= Smart site : optimisation de flotte 24 h ================= */
+let SITE_CARS = [];
+const SITE_COLORS = ["#2dd4bf", "#7c8cf8", "#f59e0b", "#f87171", "#34d399", "#e879f9"];
+
+function vehName(veh_id) {
+  const v = (META ? META.vehicles : []).find(x => x.id === veh_id);
+  return v ? v.name : veh_id;
+}
+
+function renderCars() {
+  $("siteCars").innerHTML = SITE_CARS.map((c, i) =>
+    `<div class="opt" style="padding:6px 10px;"><span class="dot" style="background:${SITE_COLORS[i % 6]}"></span>
+      ${vehName(c.veh_id)} — SoC ${c.soc} % — départ dans ${c.departure_h} h
+      <span style="float:right;cursor:pointer;color:var(--bad);" onclick="removeCar(${i})">×</span></div>`).join("")
+    || `<div class="note">Aucun véhicule — ajoutez-en ou chargez la flotte de démo.</div>`;
+}
+
+function addCar() {
+  SITE_CARS.push({veh_id: $("siteVehSel").value,
+                  soc: Math.max(5, Math.min(95, +$("siteVehSoc").value)),
+                  target: 80, departure_h: Math.max(2, +$("siteVehDep").value)});
+  renderCars();
+}
+function removeCar(i) { SITE_CARS.splice(i, 1); renderCars(); }
+
+function demoFleet() {
+  SITE_CARS = [
+    {veh_id: "ebus", soc: 30, target: 90, departure_h: 10},
+    {veh_id: "id4", soc: 40, target: 80, departure_h: 12},
+    {veh_id: "zoe", soc: 50, target: 80, departure_h: 8},
+    {veh_id: "model3", soc: 85, target: 85, departure_h: 14}
+  ];
+  renderCars();
+}
+
+async function siteOptimal() {
+  if (!SITE_CARS.length) { $("siteCost").textContent = "—"; return; }
+  const r = await api("/api/site_optimal", {
+    vehicles: SITE_CARS, cap_kw: +$("siteCap").value,
+    eco: $("siteEco").checked, v2g_enabled: $("siteV2G").checked,
+    window_h: 24
+  });
+  $("siteCost").textContent = r.total_cost.toFixed(2) + " €";
+  $("siteRev").textContent = r.total_v2g_revenue.toFixed(2) + " €";
+  $("sitePeak").textContent = r.peak_net_kw.toFixed(1) + " kW";
+  $("siteServed").textContent = r.served + " / " + r.total;
+  $("siteTable").querySelector("tbody").innerHTML = r.vehicles.map((v, i) =>
+    `<tr><td><span class="dot" style="background:${SITE_COLORS[i % 6]}"></span>${v.name}</td>
+     <td class="num">${v.soc0_pct} %</td><td class="num">${v.need_kwh}</td>
+     <td class="num">${v.charged_kwh}</td><td class="num">${v.departure_h} h</td>
+     <td class="num">${v.v2g_revenue.toFixed(2)}</td>
+     <td class="num" style="color:${v.net <= 0 ? "var(--good)" : "inherit"}">${v.net.toFixed(2)}</td>
+     <td style="color:${v.target_met ? "var(--good)" : "var(--warn)"}"><b>${v.target_met ? t("siteOK") : t("siteKO")}</b></td></tr>`).join("");
+
+  /* graphique : charge empilée / décharge / prix réel / plafond */
+  const cv = $("siteChart"), {ctx, w, h} = prep(cv);
+  ctx.clearRect(0, 0, w, h);
+  const padL = 46, padB = 26, padT = 14;
+  const cw = w - padL - 12, ch = h - padB - padT;
+  const max = Math.max(r.cap_kw, ...r.site_charge) * 1.15;
+  const bw = cw / r.site_charge.length;
+  const y = v => padT + ch - (v / max) * ch;
+  const x = hr => padL + hr * bw;
+
+  ctx.strokeStyle = "#26314d";
+  ctx.beginPath(); ctx.moveTo(padL, y(0)); ctx.lineTo(w - 12, y(0)); ctx.stroke();
+
+  r.vehicles.forEach((v, vi) => {
+    ctx.fillStyle = SITE_COLORS[vi % 6];
+    v.sched_c.forEach((p, hr) => {
+      if (p > 0) ctx.fillRect(x(hr) + 1, y(p), bw - 2, y(0) - y(p));
+    });
+  });
+  r.vehicles.forEach((v, vi) => {
+    ctx.fillStyle = "#f8717188";
+    v.sched_d.forEach((p, hr) => {
+      if (p > 0) ctx.fillRect(x(hr) + 1, y(0), bw - 2, y(p / max * ch));
+    });
+  });
+
+  /* courbe de prix réelle */
+  const maxP = Math.max(...r.prices) * 1.2;
+  ctx.strokeStyle = "#7c8cf8"; ctx.lineWidth = 2; ctx.beginPath();
+  r.prices.forEach((p, hr) => {
+    const xx = x(hr) + bw / 2, yy = padT + ch - (p / maxP) * ch;
+    hr ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy);
+  });
+  ctx.stroke(); ctx.setLineDash([]);
+
+  /* plafond */
+  ctx.strokeStyle = "#f87171"; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+  ctx.beginPath(); ctx.moveTo(padL, y(r.cap_kw)); ctx.lineTo(w - 12, y(r.cap_kw)); ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = "#8294b5"; ctx.font = "10px sans-serif"; ctx.textAlign = "center";
+  for (let hr = 0; hr < r.site_charge.length; hr += 3)
+    ctx.fillText((r.start_hour + hr) % 24 + "h", x(hr) + bw / 2, h - 10);
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#f87171"; ctx.fillText(r.cap_kw + " kW", padL + 4, y(r.cap_kw) - 5);
+}
+
+$("btnSiteAdd").onclick = addCar;
+$("btnSiteOpt").onclick = siteOptimal;
+$("btnSiteDemo").onclick = demoFleet;
+["siteCap"].forEach(id => $(id).addEventListener("input", () => {
+  $("siteCapVal").textContent = $(id).value + " kW";
+}));
+window.addEventListener("load", () => {
+  const iv = setInterval(() => {
+    if (META) { demoFleet(); clearInterval(iv); }
+  }, 200);
+});
+
 /* ================= init ================= */
 window.addEventListener("load", async () => {
+ try {
  META = await api("/api/meta");
+ if (!META || !META.vehicles) throw new Error((META && META.error) || "meta empty");
  $("vehicle").innerHTML = META.vehicles.map(v =>
  `<option value="${v.id}">${v.name} — ${v.battery} kWh${v.v2g ? " · V2G" : ""}</option>`).join("");
  $("destination").innerHTML = META.destinations.map(d =>
  `<option value="${d.id}">${d.name}</option>`).join("");
+  $("destination").value = "d2";
  $("tripOrigin").innerHTML = META.destinations.map(d =>
  `<option value="${d.id}">${d.name}</option>`).join("");
  $("soc").oninput = () => $("socVal").textContent = $("soc").value + "%";
@@ -1295,11 +1522,69 @@ window.addEventListener("load", async () => {
  startBtn.textContent = t("dStartBtn");
  startBtn.onclick = startSession;
  $("options").after(startBtn);
- optimize();
+  try { await optimize(); } catch (e) { if (window.__errs) window.__errs.push("init:" + e.message); }
+ } catch (e) {
+  if (window.__errs) window.__errs.push("init:" + e.message);
+  toast(t("apiErr") + " init: " + e.message);
+ }
+ window.__ready = true;
 });
 </script>
 
 
 
+
+<script>
+if (location.hash === "#test") {
+  window.addEventListener("load", () => {
+    const out = [];
+    const steps = [
+      ["#btnOptimize", "optimize"],
+      ["#startSessionBtn", "sess"],
+      ["#btnStep", "step1"],
+      ["#btnStep", "step2"],
+      ["#btnStep", "step3"],
+      ["#btnTrip", "trip"],
+      ['button[data-tab="sites"]', "sites"],
+      ["#btnSiteDemo", "site-demo"],
+      ["#btnSiteOpt", "site-opt"]
+    ];
+    let k = 0;
+    const run = () => {
+      if (k >= steps.length) {
+        setTimeout(() => {
+          document.title = "E2E:" + out.join("|")
+            + " ##SOC:" + document.getElementById("sessSoc").textContent
+            + " ##EARN:" + document.getElementById("sessEarned").textContent
+            + " ##OPT:" + document.querySelectorAll("#options .opt").length
+            + " ##SITE:" + document.getElementById("sitePeak").textContent
+            + " ##SERVED:" + document.getElementById("siteServed").textContent
+            + " ##ERR:" + ((window.__errs || []).join(" ; ") || "aucune");
+        }, 1500);
+        return;
+      }
+      const [sel, label] = steps[k++];
+      try {
+        const el = document.querySelector(sel);
+        if (!el) throw new Error("missing " + sel);
+        el.click(); out.push(label + ":ok");
+      } catch (e) { out.push(label + ":ERR:" + e.message); }
+      document.title = "E2E-progrès:" + out.join("|");
+      setTimeout(run, 800);
+    };
+    const waitReady = (n) => {
+      if (window.__ready) return run();
+      if (n <= 0) {
+        let diag = "";
+        try { diag = "META:" + (typeof META) + " veh:" + document.getElementById("vehicle").options.length + " #opt:" + document.querySelectorAll("#options .opt").length; } catch (e) { diag = "diagErr:" + e.message; }
+        document.title = "E2E:TIMEOUT-ready ##" + diag + " ##ERR:" + ((window.__errs || []).join(" ; ") || "aucune");
+        return;
+      }
+      setTimeout(() => waitReady(n - 1), 100);
+    };
+    waitReady(100);
+  });
+}
+</script>
 </body>
 </html>

@@ -1,42 +1,75 @@
-# ⚡ VoltHub T2G — Smart EV Charging / Transportation-to-Grid Platform Prototype
+# VoltHub T2G — Smart EV Charging / Transportation-to-Grid Platform Prototype
 
 Prototype for **Proj5 — Smart EV charging ou Transport-to-Grid (T2G)**.
+
+The platform runs on **real open data**: day-ahead market prices (Fraunhofer
+Energy-Charts), French grid carbon intensity and solar generation (RTE éCO2mix),
+real charging stations in Paris (OpenStreetMap) and real 2025 EV market shares
+(Our World in Data). Every number on screen is traceable — `/api/data_sources`
+lists source, licence and fetch date for each dataset.
 
 It demonstrates, in one running demo, the four topics of the project:
 
 | Project part | Where it is in the prototype |
 |---|---|
 | **1. Complexité de la charge mobile** | Tab 5 *Flotte mobile* — animated 60-EV fleet moving through the city (commute, evening activities, night charging, V2G discharge at the 18–21h peak) showing that the grid **never has full visibility of EV locations**. Also Tab 4 *Analyse réseau* — EV as **load / storage / power plant** (SAS–Intel *Charging Ahead with EV Analytics*). |
-| **2. Plate-forme digitale (technique)** | The whole app: REST API backend + optimizer engine (estimation des **lieux, temps, durée et coût** de recharge) + live session telemetry. Tab 1 + Tab 2. |
+| **2. Plate-forme digitale (technique)** | The whole app: REST API backend (13 endpoints) + optimizer engine (estimation des **lieux, temps, durée et coût** de recharge) + live session telemetry + trip planner + **Smart Site** multi-vehicle orchestration. Tabs 1, 2 and 4b. |
 | **3. Business model adopté dans le monde** | Tab 3 *Modèles & valeur* — the **4 business models of the Guidehouse T2G white paper** with annual revenue simulation and value-stacking bonus, a **break-even calculator** (CAPEX/OPEX/payback per charger type), **plus the « Qui fait quoi ? Qui paie ? Où acheter ? » table** (actors, payers, procurement channels). |
-| **4. Retours d'expériences + démo** | Tab 6 *Retours d'expérience* — country comparison (Norway, Netherlands, France, Germany, US-California, China: EV share, V2G status, actors, policy) with chart; the VW/Elli, Shell/NewMotion, BP/Chargemaster, GM/Bechtel case studies in the Tab 3 note; the *Live Session* is your **live T2G demo**. |
+| **4. Retours d'expériences + démo** | Tab 6 *Retours d'expérience* — country comparison (Norway, Netherlands, France, Germany, US-California, China) using **real OWID 2025 EV shares** + V2G status, actors and policy; the VW/Elli, Shell/NewMotion, BP/Chargemaster, GM/Bechtel case studies in the Tab 3 note; the *Live Session* is your **live T2G demo**. |
 
-**Alive-platform features:** live ticker in the header (spot price + grid CO₂ + hour, polled every 5 s), simulated station occupancy on the map (green/red rings, tooltips), CO₂ footprint and V2G battery-degradation cost in every optimizer result, hover tooltips on the plan chart and city map, **session registry** (all vehicles currently plugged into the platform, Tab 2), **power modulation** (same cost, reduced peak power — the orchestrator spreads energy over the cheapest hours instead of blasting them), and a **trip planner** (« do I need a charging stop on the way? » — Tab 1).
+The 7 tabs (UI labels in French): **1** Recharge intelligente (plan) · **2**
+Session en direct · **3** Modèles & valeur · **4** Analyse réseau · **4b**
+Smart site · **5** Flotte mobile · **6** Retours d'expérience.
 
-> The interface is in **French** (matching the project brief); industry terms (V2G, SoC, Load Orchestrator…) stay in English as in the literature.
+**Alive-platform features:** live ticker in the header (real spot price + grid CO₂
++ solar share + hour, refreshed every 5 s), evolving station occupancy on the map
+(vehicles arrive and leave — green/red rings, tooltips), CO₂ footprint and V2G
+battery-degradation cost in every optimizer result, hover tooltips on the plan
+chart and city map, **session registry** (all vehicles currently plugged into the
+platform, Tab 2), **power modulation** (same cost, reduced peak power — the
+orchestrator spreads energy over the cheapest hours instead of blasting them),
+**eco mode** (prefer the hours when solar generation is high), **trip planner**
+(« do I need a charging stop on the way? ») and **Smart Site** (several vehicles
+sharing one limited site connection).
+
+> The interface is in **French** (matching the project brief) with a full **EN**
+> toggle; industry terms (V2G, SoC, Load Orchestrator…) stay in English as in the
+> literature.
 
 ## Run it
 
 ```bash
-cd t2g-prototype
+cd t2g
 python3 app.py
 # open http://localhost:5000
 ```
 
 **Zero dependencies** — pure Python 3 standard library (no Flask, no pip install,
-no CDN). Runs on any machine with any Python 3, fully offline.
+no CDN). Runs on any machine with any Python 3, fully offline (the datasets are
+committed in `data/`).
 
-Optional: `PORT=8000 python3 app.py` to change the port.
+```bash
+PORT=8000 python3 app.py        # change the port
+python3 test_api.py             # 58 automated tests (API + engine + data)
+python3 scripts/fetch_data.py   # refresh the real datasets (free, no API key)
+open http://localhost:5000/#test  # built-in browser self-test (writes a report in the page title)
+```
 
 ## Architecture
 
 ```
-static/index.html  ──HTTP──►  Stdlib HTTP API (app.py)  ──►  t2g_core.py (engine)
-   4-tab dashboard             /api/optimize              • optimizer (lieux/temps/durée/coût)
-   canvas map & charts         /api/session/start|step    • V2G plan (discharge peak, charge valley)
-   vanilla JS, offline         /api/valuestack            • session state machine (10-min ticks)
-                               /api/grid                  • value stacking (4 business models)
-                                                          • grid orchestration analytics
+static/index.html  ──HTTP───►  Stdlib HTTP API (app.py)  ──►  t2g_core.py (engine)
+   7-tab dashboard              /api/meta        /api/optimize      • optimizer (lieux/temps/durée/coût)
+   canvas map & charts          /api/live        /api/trip          • V2G plan (discharge peak, charge valley)
+   vanilla JS, offline          /api/sessions    /api/site          • power modulation + schedule
+   FR / EN toggle               /api/session/start|step             • multi-vehicle Smart Site allocation
+                                /api/valuestack  /api/break_even    • value stacking (4 business models)
+                                /api/grid        /api/countries     • grid orchestration analytics
+                                /api/data_sources                   • session registry + telemetry
+data/  ──►  data_loader.py  ──►  (all numbers on screen come from here — nothing hardcoded)
+  prix_spot.json (Fraunhofer) · co2_intensite.json + soleil.json (RTE)
+  bornes.json (OpenStreetMap Paris) · vehicules.json · destinations.json
+  ev_part_pays.json (Our World in Data 2025) · pays_details.json · hypotheses.json
 ```
 
 ## How the optimizer works (part 2 — "estimation")
@@ -96,7 +129,10 @@ Stacking the four models yields ≈ +60% vs a charging-only model — this is th
 
 ## Limitations (say this in the Q&A!)
 
-- Simulated prices/network — the point is the **business logic**, not real market data.
+- **Real data for prices, CO₂, solar, stations and EV shares** (Fraunhofer, RTE,
+  OpenStreetMap, Our World in Data — see `/api/data_sources`). Still **simulated
+  states**: station occupancy, the 60-EV fleet behaviour and the business
+  assumptions (`data/hypotheses.json`, calibrated on published ranges).
 - One-shot hourly optimisation (no rolling MPC, no network constraints).
 - No OCPP/ISO 15118 yet — the roadmap to a "real" platform is:
   **OCPP 2.0.1** (charger↔platform), **ISO 15118-20** (Plug&Charge + bidirectional

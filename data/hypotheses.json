@@ -1,0 +1,104 @@
+{
+ "source": "hypothèses du groupe, calibrées sur les fourchettes publiées (études ICCT/IEA/NREL) — MODIFIABLES",
+ "v2g": {
+  "reserve_soc": 0.3,
+  "efficacite_aller_retour": 0.92,
+  "usure_eur_par_kwh": 0.07,
+  "note_usure": "fourchette publiée : 0,05-0,12 EUR/kWh cyclé"
+ },
+ "bornes": {
+  "marge_defaut_eur_par_kwh": 0.15,
+  "frais_session_defaut": 0.0,
+  "note": "OSM ne publie pas les prix — marge assumée, modifiable"
+ },
+ "charger_types": {
+  "AC7": {
+   "kw": 7,
+   "capex": 3500,
+   "opex": 300,
+   "label": {
+    "fr": "CA 7 kW — domicile / copropriété",
+    "en": "AC 7 kW — home / apartment block"
+   }
+  },
+  "AC22": {
+   "kw": 22,
+   "capex": 9000,
+   "opex": 500,
+   "label": {
+    "fr": "CA 22 kW — parking / entreprise",
+    "en": "AC 22 kW — car park / business"
+   }
+  },
+  "DC50": {
+   "kw": 50,
+   "capex": 45000,
+   "opex": 3000,
+   "label": {
+    "fr": "DC 50 kW — urbain",
+    "en": "DC 50 kW — urban"
+   }
+  },
+  "DC150": {
+   "kw": 150,
+   "capex": 95000,
+   "opex": 5500,
+   "label": {
+    "fr": "DC 150 kW — autoroute",
+    "en": "DC 150 kW — highway"
+   }
+  },
+  "note": "CAPEX = borne + installation + raccordement (hypothèses ICCT/IEA)"
+ },
+ "business": {
+  "kwh_par_vehicule_jour": 15.0,
+  "marge_csp_eur_par_kwh": 0.08,
+  "frais_session_annuel_par_vehicule": 182.5,
+  "frais_infrastructure_eur_par_kwh": 0.02,
+  "kwh_cycle_v2g_par_jour": 10.0,
+  "spread_v2g_eur_par_kwh": 0.2,
+  "efficacite_v2g": 0.92,
+  "utilisation_v2g": 0.85,
+  "kw_inscrits_par_vehicule": 7.0,
+  "paiement_capacite_eur_par_kw_an": 15.0,
+  "attach_maaS": 0.35,
+  "abonnement_maaS_eur_mois": 12.0,
+  "marge_maaS": 0.3,
+  "note": "hypothèses business — calibrées sur les fourchettes publiées"
+ },
+ "reseau": {
+  "p_charge_domicile_kw": 11.0,
+  "p_decharge_v2g_kw": 3.3,
+  "part_soir": 0.7,
+  "part_matin": 0.3,
+  "heures_vallee": 7
+ },
+ "trajet": {
+  "reserve_arrivee": 0.1,
+  "note": "réserve de batterie minimale à l arrivée (10 %)"
+ },
+ "site": {
+  "nominal_par_ve_kw": 22.0,
+  "note": "puissance AC nominale par véhicule sur un site (22 kW)"
+ },
+ "eco": {
+  "bonus_solaire_eur_par_kwh_max": 0.1,
+  "note": "bonus max appliqué aux heures 100 % solaires (0,10 EUR/kWh d équivalent)"
+ },
+ "charge": {
+  "seuil_taper": 0.55,
+  "pente_taper": 0.75,
+  "puissance_min_relative": 0.15,
+  "note": "courbe de puissance : pleine puissance sous 55 % de SoC, décroissance linéaire au-delà, plancher à 15 %"
+ },
+ "occupation": {
+  "taux_jour": 0.55,
+  "taux_nuit": 0.2,
+  "heures_jour_debut": 8,
+  "heures_jour_fin": 20,
+  "variation_par_appel": 0.18,
+  "rappel_vers_regime": 0.25,
+  "plafond": 0.95,
+  "note": "occupation simulée des bornes : marche aléatoire évolutive (arrivées/départs), rappelée vers le régime jour/nuit"
+ }
+}

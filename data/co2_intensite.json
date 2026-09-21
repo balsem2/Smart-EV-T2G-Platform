@@ -1,0 +1,32 @@
+{
+ "source": "RTE eco2mix (opendata.reseaux-energies.fr) — taux de CO2 national, donnees ouvertes",
+ "fetched_at": "2026-09-21T17:29:14.570911+00:00",
+ "unit": "gCO2/kWh",
+ "note": "moyenne par heure (UTC), dernieres 24-48 h",
+ "co2_intensite": [
+  16.3,
+  14.4,
+  14.2,
+  14.8,
+  15.2,
+  15,
+  14.3,
+  13.4,
+  12.7,
+  13.6,
+  15,
+  15.8,
+  15.7,
+  15.4,
+  14.3,
+  14,
+  15.7,
+  20.2,
+  24.6,
+  25.4,
+  22.8,
+  21.9,
+  23.8,
+  19.9
+ ]
+}
