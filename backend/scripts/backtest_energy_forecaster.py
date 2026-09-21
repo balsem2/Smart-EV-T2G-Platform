@@ -15,11 +15,13 @@ from sqlalchemy import select
 from app.database import get_engine
 from app.ml.energy_forecaster import (
     ARTIFACT_PATH,
+    DAILY_LAGS,
     LAGS,
     ROLLING_WINDOWS,
     TARGETS,
-    add_calendar_features,
+    build_runtime_feature_values,
     build_feature_frame,
+    target_feature_columns,
 )
 from app.models import EnergyData
 
@@ -51,7 +53,8 @@ def build_recursive_forecast(
     origin: pd.Timestamp,
 ) -> list[dict]:
     history_frame = regular.loc[
-        origin - timedelta(minutes=15 * max(LAGS)) : origin - timedelta(minutes=15),
+        origin - timedelta(minutes=15 * max(LAGS + DAILY_LAGS)) :
+        origin - timedelta(minutes=15),
         list(TARGETS),
     ]
     history = {
@@ -61,22 +64,12 @@ def build_recursive_forecast(
 
     for step in range(1, FORECAST_STEPS + 1):
         timestamp = origin + timedelta(minutes=15 * (step - 1))
-        calendar = add_calendar_features(
-            pd.DataFrame(index=pd.DatetimeIndex([timestamp]))
-        )
-        values = calendar.iloc[0].to_dict()
-        for target in TARGETS:
-            series = history[target]
-            for lag in LAGS:
-                values[f"{target}_lag_{lag}"] = series[-lag]
-            for window in ROLLING_WINDOWS:
-                values[f"{target}_rolling_mean_{window}"] = (
-                    sum(series[-window:]) / window
-                )
-
-        feature_row = pd.DataFrame([values], columns=bundle["feature_columns"])
+        values = build_runtime_feature_values(timestamp, history)
         predicted = {}
         for target in TARGETS:
+            feature_row = pd.DataFrame(
+                [values], columns=target_feature_columns(bundle, target)
+            )
             value = float(bundle["models"][target].predict(feature_row)[0])
             if target != "electricity_price":
                 value = max(0.0, value)
@@ -114,7 +107,7 @@ def select_origins(
     ]
     origins = []
     last_origin = None
-    required_history = max(LAGS)
+    required_history = max(LAGS + DAILY_LAGS)
     for origin in candidates:
         if last_origin is not None and origin - last_origin < ORIGIN_SPACING:
             continue

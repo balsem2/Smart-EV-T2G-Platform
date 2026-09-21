@@ -52,6 +52,7 @@ def optimize_charging(
     energy_rows: list[EnergyData],
     mode: OptimizationMode,
     forecast_rows: list[dict] | None = None,
+    forecast_model_name: str | None = None,
 ) -> dict:
     if not energy_rows:
         raise ValueError("Energy data is empty.")
@@ -186,7 +187,7 @@ def optimize_charging(
         "v2g_energy": round(v2g_energy, 4),
         "v2g_reward": round(v2g_reward, 4),
         "forecast_source": "machine_learning" if forecast_rows else "historical_baseline",
-        "model_name": "hist-gradient-boosting-at-v1" if forecast_rows else "daily-profile-baseline-v1",
+        "model_name": forecast_model_name or "daily-profile-baseline-v1",
         "start_time": min(slot["timestamp"] for slot in selected_slots),
         "end_time": max(slot["timestamp"] for slot in selected_slots)
         + timedelta(minutes=15),

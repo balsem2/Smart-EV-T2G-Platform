@@ -1,0 +1,115 @@
+{
+  "timestamp": "2026-09-21T11:55:23.000704",
+  "dataset_rows": 131158,
+  "test_rows": 19167,
+  "models": [
+    {
+      "model_name": "Seasonal Baseline",
+      "description": "Historical quarter-hour slot average conditioned on weekday",
+      "train_time_sec": 0.075,
+      "metrics": {
+        "electricity_price": {
+          "mae": 16.05621082264493,
+          "rmse": 20.827446805833247,
+          "r2": -0.13439887654947236
+        },
+        "grid_load": {
+          "mae": 437.1977725906607,
+          "rmse": 572.8362005650265,
+          "r2": 0.7877316614125963
+        },
+        "solar_generation": {
+          "mae": 121.28279764415232,
+          "rmse": 192.58667763540785,
+          "r2": 0.4954422099204844
+        },
+        "wind_generation": {
+          "mae": 456.5530310215148,
+          "rmse": 571.1972041112689,
+          "r2": 0.007436563743626223
+        }
+      }
+    },
+    {
+      "model_name": "Ridge Regression",
+      "description": "L2-regularized linear model with cyclical & lag features",
+      "train_time_sec": 0.16,
+      "metrics": {
+        "electricity_price": {
+          "mae": 3.6281361497301514,
+          "rmse": 9.931079647435835,
+          "r2": 0.7420790321800318
+        },
+        "grid_load": {
+          "mae": 55.84027474532694,
+          "rmse": 74.88865938043729,
+          "r2": 0.9963720906915875
+        },
+        "solar_generation": {
+          "mae": 37.148562867310616,
+          "rmse": 71.12784983326901,
+          "r2": 0.9311763352618482
+        },
+        "wind_generation": {
+          "mae": 23.080517739137207,
+          "rmse": 41.690326220537024,
+          "r2": 0.9947124228928002
+        }
+      }
+    },
+    {
+      "model_name": "Random Forest",
+      "description": "Non-linear Bagging ensemble of decision trees",
+      "train_time_sec": 5.86,
+      "metrics": {
+        "electricity_price": {
+          "mae": 4.538524094283604,
+          "rmse": 10.2081776801704,
+          "r2": 0.7274851574699817
+        },
+        "grid_load": {
+          "mae": 55.285352066758506,
+          "rmse": 72.54952917861495,
+          "r2": 0.9965951851036594
+        },
+        "solar_generation": {
+          "mae": 46.437019039611094,
+          "rmse": 86.15944646499139,
+          "r2": 0.8990132876322858
+        },
+        "wind_generation": {
+          "mae": 47.78655568433957,
+          "rmse": 77.1529625937108,
+          "r2": 0.9818911304132969
+        }
+      }
+    },
+    {
+      "model_name": "HistGradientBoosting (V2 Production)",
+      "description": "Histogram-based Gradient Boosted Trees with Target-Specific Daily Lags",
+      "train_time_sec": 4.89,
+      "metrics": {
+        "electricity_price": {
+          "mae": 3.4530022655204737,
+          "rmse": 9.43037015859541,
+          "r2": 0.7674313351490691
+        },
+        "grid_load": {
+          "mae": 36.16772252930487,
+          "rmse": 49.016863809360416,
+          "r2": 0.9984457697717883
+        },
+        "solar_generation": {
+          "mae": 45.87621381413196,
+          "rmse": 86.25055625870786,
+          "r2": 0.8987995967679607
+        },
+        "wind_generation": {
+          "mae": 25.749908591684743,
+          "rmse": 44.97574928039872,
+          "r2": 0.9938462061801631
+        }
+      }
+    }
+  ]
+}

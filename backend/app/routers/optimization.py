@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app import crud, schemas
 from app.database import get_db
 from app.dependencies import CurrentUser
-from app.ml.energy_forecaster import forecast_energy
+from app.ml.energy_forecaster import forecast_energy, model_metadata
 from app.optimizer import optimize_charging
 
 
@@ -43,8 +43,10 @@ def run_optimization(
             charging_request.created_at or datetime.now(),
             charging_request.departure_time,
         )
+        forecast_model_name = model_metadata()["model_name"]
     except (FileNotFoundError, ValueError):
         forecast_rows = None
+        forecast_model_name = None
 
     try:
         result = optimize_charging(
@@ -54,6 +56,7 @@ def run_optimization(
             energy_rows,
             options.mode,
             forecast_rows=forecast_rows,
+            forecast_model_name=forecast_model_name,
         )
     except ValueError as error:
         raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error

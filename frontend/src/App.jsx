@@ -14,6 +14,7 @@ const nextMorning = () => {
 const navigation = [
   ["overview", "⌂", "Overview"],
   ["plan", "⚡", "Plan charging"],
+  ["ai", "🧠", "AI Grid Intelligence"],
   ["vehicles", "◇", "My vehicles"],
   ["rewards", "◎", "Rewards"],
   ["settings", "⚙", "Settings"],
@@ -297,6 +298,7 @@ export default function App() {
         {error && <p className="error-message global-error">{error}</p>}
         {active === "overview" && <Overview user={user} vehicles={vehicles} requests={requests} rewards={rewards} setActive={setActive} />}
         {active === "plan" && <PlanView token={token} vehicles={vehicles} stations={stations} paymentMethod={paymentMethod} results={results} setResults={setResults} setError={setError} refreshProfile={refreshProfile} />}
+        {active === "ai" && <AIView token={token} />}
         {active === "vehicles" && <VehiclesView token={token} catalog={catalog} vehicles={vehicles} setVehicles={setVehicles} setError={setError} />}
         {active === "rewards" && <RewardsView user={user} rewards={rewards} />}
         {active === "settings" && <SettingsView token={token} user={user} setUser={setUser} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} setError={setError} />}
@@ -497,4 +499,260 @@ function SettingsView({ token, user, setUser, paymentMethod, setPaymentMethod, s
   const save = async (event) => { event.preventDefault(); setError(""); setSaved(false); try { const updated = await api.patch("/me", form, token); setUser(updated); setSaved(true); } catch (requestError) { setError(requestError.message); } };
   const setTheme = async (theme) => { try { const updated = await api.patch("/me", { theme }, token); setUser(updated); } catch (requestError) { setError(requestError.message); } };
   return <section className="view-stack"><div className="split-grid settings-layout"><form className="content-card" onSubmit={save}><div className="card-heading"><div><p className="eyebrow">ACCOUNT</p><h3>Personal information</h3></div></div><Field label="Full name" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required /><Field label="Email" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} required /><button className="primary-button">Save account changes<span>→</span></button>{saved && <p className="success-message">Account updated successfully.</p>}</form><article className="content-card"><div className="card-heading"><div><p className="eyebrow">APPEARANCE</p><h3>Choose your theme</h3></div></div><div className="theme-grid">{[["light", "☀", "Light"], ["dark", "◐", "Dark"], ["system", "◒", "System"]].map(([key, icon, label]) => <button key={key} className={user.theme === key ? "active" : ""} onClick={() => setTheme(key)}><span>{icon}</span><b>{label}</b><small>{key === "system" ? "Follow your device" : `${label} all the time`}</small></button>)}</div></article></div><div className="split-grid settings-layout"><PasswordSettings token={token} /><CardSettings token={token} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} /></div></section>;
+}
+
+function AIView({ token }) {
+  const [tab, setTab] = useState("forecast");
+  const [forecast, setForecast] = useState(null);
+  const [benchmark, setBenchmark] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [selectedSlot, setSelectedSlot] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    Promise.all([
+      api.get("/ai/forecast-24h", token).catch(() => null),
+      api.get("/ai/benchmark", token).catch(() => null),
+    ])
+      .then(([fc, bm]) => {
+        if (!mounted) return;
+        setForecast(fc);
+        setBenchmark(bm);
+        if (fc?.slots?.length) {
+          setSelectedSlot(fc.slots[0]);
+        }
+      })
+      .catch((err) => {
+        if (mounted) setError(err.message);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [token]);
+
+  if (loading) {
+    return (
+      <div className="empty-copy">
+        <p>Loading AI Day-Ahead Forecast & Benchmark…</p>
+      </div>
+    );
+  }
+
+  const slots = forecast?.slots || [];
+  const maxPrice = Math.max(...slots.map((s) => s.electricity_price), 10);
+  const minPrice = Math.min(...slots.map((s) => s.electricity_price), 0);
+
+  return (
+    <section className="view-stack ai-view-container">
+      <article className="ai-hero-card">
+        <div className="ai-hero-top">
+          <div>
+            <div className="ai-badge">
+              <i /> Production Model: {forecast?.model_name || "hist-gradient-boosting-at-v2"}
+            </div>
+            <h2>AI Grid & Energy Intelligence</h2>
+            <p>
+              Day-ahead 24-hour predictive models forecasting spot prices, grid stress,
+              and renewable production to dynamically schedule V1G charge and V2G export slots.
+            </p>
+          </div>
+        </div>
+        <div className="ai-tab-buttons">
+          <button
+            className={`ai-tab-btn ${tab === "forecast" ? "active" : ""}`}
+            onClick={() => setTab("forecast")}
+          >
+            📈 24h Predictive Timeline
+          </button>
+          <button
+            className={`ai-tab-btn ${tab === "benchmark" ? "active" : ""}`}
+            onClick={() => setTab("benchmark")}
+          >
+            📊 Multi-Model Academic Benchmark
+          </button>
+        </div>
+      </article>
+
+      {forecast?.summary && (
+        <div className="stat-grid forecast-kpis">
+          <StatCard
+            label="Avg Expected Price"
+            value={`€${forecast.summary.avg_price_eur_mwh}`}
+            detail={`Min: €${forecast.summary.min_price_eur_mwh} · Max: €${forecast.summary.max_price_eur_mwh}`}
+            accent
+          />
+          <StatCard
+            label="Peak Grid Demand"
+            value={`${Math.round(forecast.summary.avg_load_mw)} MW`}
+            detail="Austrian transmission load"
+          />
+          <StatCard
+            label="Solar Peak Inflow"
+            value={`${Math.round(forecast.summary.solar_peak_mw)} MW`}
+            detail="Photovoltaic generation peak"
+          />
+          <StatCard
+            label="Total Clean Energy"
+            value={`${Math.round(forecast.summary.total_renewable_mwh)} MWh`}
+            detail="Solar + Wind available"
+          />
+        </div>
+      )}
+
+      {tab === "forecast" && (
+        <article className="forecast-visual-card">
+          <div className="forecast-visual-header">
+            <div>
+              <p className="eyebrow">DAY-AHEAD 96-SLOT HORIZON (15-MIN RESOLUTION)</p>
+              <h3>Quarter-Hourly Electricity Price & Dispatch Timeline</h3>
+            </div>
+            <div className="forecast-legend">
+              <span><i className="legend-charge" /> V1G Optimal Charge</span>
+              <span><i className="legend-discharge" /> V2G Peak Export</span>
+              <span><i className="legend-standard" /> Standard Grid</span>
+            </div>
+          </div>
+
+          <div className="forecast-chart-bars">
+            {slots.map((s, idx) => {
+              const heightPct = Math.max(
+                12,
+                Math.min(100, ((s.electricity_price - minPrice) / (maxPrice - minPrice || 1)) * 100)
+              );
+              const recClass =
+                s.recommendation === "V1G_CHARGE"
+                  ? "v1g"
+                  : s.recommendation === "V2G_DISCHARGE"
+                  ? "v2g"
+                  : "standard";
+              const isSelected = selectedSlot?.timestamp === s.timestamp;
+
+              return (
+                <div
+                  key={s.timestamp || idx}
+                  className={`forecast-bar-item ${recClass} ${isSelected ? "selected" : ""}`}
+                  style={{ height: `${heightPct}%` }}
+                  title={`${new Date(s.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}: €${s.electricity_price}/MWh (${s.recommendation})`}
+                  onClick={() => setSelectedSlot(s)}
+                  onMouseEnter={() => setSelectedSlot(s)}
+                />
+              );
+            })}
+          </div>
+
+          {selectedSlot && (
+            <div className="slot-inspector">
+              <div>
+                <small className="muted">QUARTER-HOUR SLOT</small>
+                <div>
+                  <b>
+                    {new Date(selectedSlot.timestamp).toLocaleDateString([], { month: "short", day: "numeric" })} · {new Date(selectedSlot.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </b>
+                </div>
+              </div>
+              <div>
+                <small className="muted">PRICE (€/MWH)</small>
+                <div><b>€{selectedSlot.electricity_price}</b></div>
+              </div>
+              <div>
+                <small className="muted">GRID LOAD</small>
+                <div><b>{selectedSlot.grid_load} MW</b></div>
+              </div>
+              <div>
+                <small className="muted">RENEWABLES</small>
+                <div>
+                  <b>{selectedSlot.renewable_total} MW</b>{" "}
+                  <small className="muted">(☀️ {selectedSlot.solar_generation} + 💨 {selectedSlot.wind_generation})</small>
+                </div>
+              </div>
+              <div>
+                <small className="muted">COMPOSITE SCORE</small>
+                <div><b>{selectedSlot.composite_score}</b></div>
+              </div>
+              <div>
+                <span
+                  className={`slot-action-tag ${
+                    selectedSlot.recommendation === "V1G_CHARGE"
+                      ? "v1g"
+                      : selectedSlot.recommendation === "V2G_DISCHARGE"
+                      ? "v2g"
+                      : "standard"
+                  }`}
+                >
+                  {selectedSlot.recommendation === "V1G_CHARGE"
+                    ? "⚡ V1G Optimal Charge"
+                    : selectedSlot.recommendation === "V2G_DISCHARGE"
+                    ? "🔋 V2G Peak Export"
+                    : "Standard Grid Slot"}
+                </span>
+              </div>
+            </div>
+          )}
+        </article>
+      )}
+
+      {tab === "benchmark" && (
+        <article className="content-card">
+          <div className="card-heading">
+            <div>
+              <p className="eyebrow">ACADEMIC RIGOR & EMPIRICAL EVALUATION</p>
+              <h3>Multi-Model Benchmark (Held-out 19,674 test observations)</h3>
+            </div>
+          </div>
+          <p className="muted" style={{ marginBottom: "20px" }}>
+            Comparison against baseline and alternative architectures on 4 continuous Austrian energy targets under the DDM1 chronological split protocol.
+          </p>
+
+          {["electricity_price", "grid_load", "solar_generation", "wind_generation"].map((target) => {
+            const readable = target.replace("_", " ").toUpperCase();
+            const unit = target.includes("price") ? "€/MWh" : "MW";
+
+            return (
+              <div key={target} style={{ marginBottom: "24px" }}>
+                <h4 style={{ margin: "0 0 8px", font: "700 15px 'Manrope'" }}>
+                  {readable} ({unit})
+                </h4>
+                <div className="benchmark-table-wrapper">
+                  <table className="benchmark-table">
+                    <thead>
+                      <tr>
+                        <th>Model</th>
+                        <th>MAE</th>
+                        <th>RMSE</th>
+                        <th>R²</th>
+                        <th>Training Duration</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {benchmark?.models?.map((m) => {
+                        const met = m.metrics[target];
+                        const isWinner = m.model_name.includes("HistGradientBoosting");
+                        return (
+                          <tr key={m.model_name} className={isWinner ? "winner" : ""}>
+                            <td>
+                              {m.model_name}
+                              {isWinner && <span className="winner-pill">Active V2</span>}
+                            </td>
+                            <td>{met ? met.mae.toFixed(4) : "—"}</td>
+                            <td>{met ? met.rmse.toFixed(4) : "—"}</td>
+                            <td>{met ? met.r2.toFixed(4) : "—"}</td>
+                            <td>{m.train_time_sec}s</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </article>
+      )}
+    </section>
+  );
 }

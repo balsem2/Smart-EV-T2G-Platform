@@ -5,14 +5,15 @@ not be presented as recursive 24-hour accuracy.
 
 | Target | Baseline MAE | ML MAE | MAE improvement | ML RMSE | ML R² |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| electricity_price | 15.8702 | 3.5959 | 77.3% | 9.4914 | 0.7632 |
-| grid_load | 442.4753 | 35.3651 | 92.0% | 48.0550 | 0.9985 |
-| solar_generation | 120.8079 | 12.5870 | 89.6% | 33.1528 | 0.9850 |
-| wind_generation | 459.2637 | 25.7544 | 94.4% | 44.9351 | 0.9938 |
+| electricity_price | 15.8702 | 3.4530 | 78.2% | 9.4304 | 0.7674 |
+| grid_load | 442.4753 | 36.1677 | 91.8% | 49.0169 | 0.9984 |
+| solar_generation | 120.8079 | 45.8823 | 62.0% | 86.2506 | 0.8988 |
+| wind_generation | 459.2637 | 25.7520 | 94.4% | 44.9767 | 0.9938 |
 
 
 ## Interpretation
 
 The ML models beat the historical slot-average baseline for every target on the
-held-out chronological test set. These are not day-ahead results. The completed
-recursive day-ahead evaluation is documented in `RECURSIVE_BACKTEST.md`.
+held-out chronological test set. These are not day-ahead results. Run
+`python -m scripts.backtest_energy_forecaster` to produce the separate recursive
+24-hour evaluation before making day-ahead accuracy claims.

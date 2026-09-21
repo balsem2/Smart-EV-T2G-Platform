@@ -12,7 +12,12 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sqlalchemy import select
 
 from app.database import get_engine
-from app.ml.energy_forecaster import TARGETS, build_feature_frame
+from app.ml.energy_forecaster import (
+    TARGETS,
+    build_feature_frame,
+    default_feature_columns,
+    solar_day_ahead_feature_columns,
+)
 from app.models import EnergyData
 
 
@@ -42,13 +47,23 @@ def main() -> None:
 
     train_end = int(len(features) * 0.70)
     validation_end = int(len(features) * 0.85)
-    x_train = features.iloc[:train_end]
-    x_validation = features.iloc[train_end:validation_end]
-    x_test = features.iloc[validation_end:]
     models = {}
     metrics = {}
+    shared_columns = default_feature_columns()
+    model_feature_columns = {
+        target: (
+            solar_day_ahead_feature_columns()
+            if target == "solar_generation"
+            else shared_columns
+        )
+        for target in TARGETS
+    }
 
     for target in TARGETS:
+        columns = model_feature_columns[target]
+        x_train = features[columns].iloc[:train_end]
+        x_validation = features[columns].iloc[train_end:validation_end]
+        x_test = features[columns].iloc[validation_end:]
         model = HistGradientBoostingRegressor(
             learning_rate=0.08,
             max_iter=180,
@@ -72,12 +87,13 @@ def main() -> None:
 
     trained_at = datetime.now(timezone.utc).isoformat()
     bundle = {
-        "model_name": "hist-gradient-boosting-at-v1",
+        "model_name": "hist-gradient-boosting-at-v2",
         "trained_at": trained_at,
         "data_start": raw.index.min().isoformat(),
         "data_end": raw.index.max().isoformat(),
         "metrics_scope": "one_step_15_minute",
         "feature_columns": list(features.columns),
+        "model_feature_columns": model_feature_columns,
         "metrics": metrics,
         "models": models,
     }
