@@ -39,7 +39,7 @@ Where:
 
 * **Source**: Austrian Transmission Grid & Day-Ahead Spot Market (ENTSO-E & E-Control via OPSD).
 * **Granularity**: 15 minutes (96 slots per day).
-* **Volume**: 131,158 continuous observations (January 1, 2015 to October 2, 2018).
+* **Volume**: 131,158 complete observations (January 1, 2015 to October 2, 2018); the timeline contains eight gaps.
 * **Data Integrity**: Zero duplicated timestamps, negative electricity prices preserved (valid economic events reflecting extreme renewable surplus).
 * **Strict Temporal Splitting** (Preventing lookahead data leakage):
   * **Train Set (70%)**: 91,810 samples (2015-01-01 to 2017-08-18)
@@ -73,7 +73,7 @@ The platform benchmarks multiple paradigms:
 1. **Seasonal Slot Baseline**: Historical conditional averages $\mathbb{E}[y \mid \text{weekday}, \text{hour}, \text{minute}]$.
 2. **Ridge Regression**: Linear model with $L_2$ regularization $\min \|y - Xw\|_2^2 + \alpha \|w\|_2^2$.
 3. **Random Forest**: Non-linear bagging ensemble of randomized decision trees.
-4. **HistGradientBoostingRegressor (V2 Production)**: Gradient-boosted decision trees with binning, monotonic constraints, and early stopping.
+4. **HistGradientBoostingRegressor (V2 Production)**: Gradient-boosted decision trees with binning and early stopping.
 
 ### Evaluation Metrics:
 * **MAE** (Mean Absolute Error): $\frac{1}{N} \sum |y_i - \hat{y}_i|$
@@ -109,3 +109,14 @@ cd backend
 Outputs:
 * `backend/reports/ddm1/recursive_24h_backtest.json`
 * `backend/reports/ddm1/RECURSIVE_BACKTEST.md`
+
+### Deployment limitation
+
+The bundled Austrian observations end in October 2018. `/ai/forecast-24h` is a
+historical demonstration using the final observed timestamp. Live predictions
+and live optimization require a current, continuous 15-minute energy feed. The
+runtime refuses to treat old observations as if they were current.
+
+The deployed solar forecast is a conservative 50/50 blend of the V2 solar model
+and the previous day's same-quarter observation. Its recursive 24-hour MAE
+improvement over that seasonal baseline is small; see the backtest report.

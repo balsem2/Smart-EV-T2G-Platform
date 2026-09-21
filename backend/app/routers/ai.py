@@ -58,9 +58,13 @@ def get_24h_forecast(
             "Energy history database is empty.",
         )
 
+    latest_row = max(energy_rows, key=lambda row: row.timestamp)
+
     if start_iso:
         try:
             start_time = datetime.fromisoformat(start_iso)
+            if start_time.tzinfo is not None:
+                start_time = start_time.astimezone(timezone.utc).replace(tzinfo=None)
         except ValueError as error:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -68,14 +72,15 @@ def get_24h_forecast(
             ) from error
     else:
         # Pick the latest available timestamp in dataset so we have full ground truth context
-        latest_row = max(energy_rows, key=lambda r: r.timestamp)
-        start_time = latest_row.timestamp
+        start_time = latest_row.timestamp + timedelta(minutes=15)
 
     end_time = start_time + timedelta(hours=24)
 
     try:
         forecast_rows = forecast_energy(energy_rows, start_time, end_time)
         meta = model_metadata()
+    except ValueError as error:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
     except Exception as error:
         raise HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -137,6 +142,13 @@ def get_24h_forecast(
 
     return {
         "model_name": meta["model_name"],
+        "forecast_mode": (
+            "historical_demo"
+            if datetime.now(timezone.utc).replace(tzinfo=None) - latest_row.timestamp
+            > timedelta(hours=1)
+            else "current"
+        ),
+        "last_observed_at": latest_row.timestamp.isoformat(),
         "start_time": start_time.isoformat(),
         "end_time": end_time.isoformat(),
         "slot_count": len(enhanced_slots),
@@ -151,4 +163,3 @@ def get_24h_forecast(
         },
         "slots": enhanced_slots,
     }
-

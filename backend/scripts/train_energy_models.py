@@ -14,6 +14,7 @@ from sqlalchemy import select
 from app.database import get_engine
 from app.ml.energy_forecaster import (
     TARGETS,
+    SOLAR_BLEND_WEIGHT,
     build_feature_frame,
     default_feature_columns,
     solar_day_ahead_feature_columns,
@@ -75,6 +76,17 @@ def main() -> None:
         model.fit(x_train, targets[target].iloc[:train_end])
         validation_prediction = model.predict(x_validation)
         test_prediction = model.predict(x_test)
+        if target == "solar_generation":
+            validation_prediction = (
+                SOLAR_BLEND_WEIGHT * validation_prediction
+                + (1 - SOLAR_BLEND_WEIGHT)
+                * features["solar_generation_lag_96"].iloc[train_end:validation_end]
+            )
+            test_prediction = (
+                SOLAR_BLEND_WEIGHT * test_prediction
+                + (1 - SOLAR_BLEND_WEIGHT)
+                * features["solar_generation_lag_96"].iloc[validation_end:]
+            )
         metrics[target] = {
             "validation": evaluate(
                 targets[target].iloc[train_end:validation_end],
@@ -94,6 +106,7 @@ def main() -> None:
         "metrics_scope": "one_step_15_minute",
         "feature_columns": list(features.columns),
         "model_feature_columns": model_feature_columns,
+        "solar_blend_weight": SOLAR_BLEND_WEIGHT,
         "metrics": metrics,
         "models": models,
     }

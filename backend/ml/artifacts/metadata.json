@@ -1,6 +1,6 @@
 {
   "model_name": "hist-gradient-boosting-at-v2",
-  "trained_at": "2026-09-21T10:53:52.871401+00:00",
+  "trained_at": "2026-09-21T18:15:15.575433+00:00",
   "data_start": "2015-01-01T07:15:00",
   "data_end": "2018-10-02T21:30:00",
   "metrics_scope": "one_step_15_minute",
@@ -174,6 +174,7 @@
       "wind_generation_rolling_mean_96"
     ]
   },
+  "solar_blend_weight": 0.5,
   "metrics": {
     "electricity_price": {
       "validation": {
@@ -201,14 +202,14 @@
     },
     "solar_generation": {
       "validation": {
-        "mae": 14.634530420225174,
-        "rmse": 33.401244871584915,
-        "r2": 0.940836917574157
+        "mae": 14.49707329441033,
+        "rmse": 34.10668761155176,
+        "r2": 0.9383114484585614
       },
       "test": {
-        "mae": 45.88232225295812,
-        "rmse": 86.25056362649732,
-        "r2": 0.8987995794782567
+        "mae": 39.17477631198548,
+        "rmse": 75.38898187683138,
+        "r2": 0.9226831432074578
       }
     },
     "wind_generation": {

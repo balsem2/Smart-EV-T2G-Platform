@@ -553,13 +553,19 @@ function AIView({ token }) {
         <div className="ai-hero-top">
           <div>
             <div className="ai-badge">
-              <i /> Production Model: {forecast?.model_name || "hist-gradient-boosting-at-v2"}
+              <i /> Model: {forecast?.model_name || "hist-gradient-boosting-at-v2"}
             </div>
             <h2>AI Grid & Energy Intelligence</h2>
             <p>
               Day-ahead 24-hour predictive models forecasting spot prices, grid stress,
               and renewable production to dynamically schedule V1G charge and V2G export slots.
             </p>
+            {forecast?.forecast_mode === "historical_demo" && (
+              <p className="muted">
+                Historical simulation based on Austrian observations through {forecast.last_observed_at}.
+                Live forecasts require a current energy-data feed.
+              </p>
+            )}
           </div>
         </div>
         <div className="ai-tab-buttons">

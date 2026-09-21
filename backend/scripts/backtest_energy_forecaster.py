@@ -21,7 +21,7 @@ from app.ml.energy_forecaster import (
     TARGETS,
     build_runtime_feature_values,
     build_feature_frame,
-    target_feature_columns,
+    predict_target,
 )
 from app.models import EnergyData
 
@@ -67,13 +67,7 @@ def build_recursive_forecast(
         values = build_runtime_feature_values(timestamp, history)
         predicted = {}
         for target in TARGETS:
-            feature_row = pd.DataFrame(
-                [values], columns=target_feature_columns(bundle, target)
-            )
-            value = float(bundle["models"][target].predict(feature_row)[0])
-            if target != "electricity_price":
-                value = max(0.0, value)
-            predicted[target] = value
+            predicted[target] = predict_target(bundle, target, values)
         for target, value in predicted.items():
             history[target].append(value)
 
@@ -197,6 +191,7 @@ def main() -> None:
 
     report = {
         "model_name": bundle["model_name"],
+        "solar_blend_weight": bundle.get("solar_blend_weight", 1.0),
         "evaluation_scope": "recursive_24_hour",
         "test_start": test_start.isoformat(),
         "test_end": regular.index.max().isoformat(),
@@ -249,6 +244,9 @@ the real day-ahead behavior used by Smart EV, without using future observations.
 These values are intentionally separate from the one-step 15-minute metrics.
 The CSV and JSON reports also include errors at +15 minutes, +1 hour, +6 hours,
 +12 hours, and +24 hours so forecast degradation can be inspected by horizon.
+The deployed solar value is a 50/50 blend of the V2 model and the previous-day
+same-slot observation. Its small gain should not be interpreted as evidence of
+reliable live performance; fresh data and further validation are still needed.
 """
     (REPORT_DIR / "RECURSIVE_BACKTEST.md").write_text(markdown, encoding="utf-8")
     print(f"Saved recursive backtest reports to {REPORT_DIR}")

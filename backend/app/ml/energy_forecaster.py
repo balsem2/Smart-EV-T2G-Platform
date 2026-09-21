@@ -27,6 +27,7 @@ CALENDAR_FEATURES = (
 LAGS = (1, 4, 96, 672)
 DAILY_LAGS = (96, 192, 288, 384, 480, 576, 672)
 ROLLING_WINDOWS = (4, 96)
+SOLAR_BLEND_WEIGHT = 0.5
 ARTIFACT_PATH = Path(__file__).resolve().parents[2] / "ml" / "artifacts" / "energy_forecaster.joblib"
 BACKTEST_PATH = Path(__file__).resolve().parents[2] / "reports" / "ddm1" / "recursive_24h_backtest.json"
 
@@ -97,6 +98,23 @@ def build_runtime_feature_values(timestamp: datetime, history: dict) -> dict:
     return values
 
 
+def predict_target(bundle: dict, target: str, values: dict) -> float:
+    """Apply the same deployed postprocessing in API forecasts and backtests."""
+    feature_row = pd.DataFrame(
+        [values], columns=target_feature_columns(bundle, target)
+    )
+    prediction = float(bundle["models"][target].predict(feature_row)[0])
+    if target == "solar_generation":
+        weight = bundle.get("solar_blend_weight", 1.0)
+        prediction = (
+            weight * prediction
+            + (1.0 - weight) * values["solar_generation_lag_96"]
+        )
+    if target != "electricity_price":
+        prediction = max(0.0, prediction)
+    return prediction
+
+
 def _round_up_to_quarter(value: datetime) -> datetime:
     rounded = value.replace(second=0, microsecond=0)
     remainder = rounded.minute % 15
@@ -122,22 +140,29 @@ def forecast_energy(energy_rows, start: datetime, end: datetime) -> list[dict]:
     )
     if len(ordered) < max(LAGS + DAILY_LAGS):
         raise ValueError("At least seven days of recent energy history are required.")
+    timestamp = _round_up_to_quarter(start)
+    latest_observation = ordered[-1].timestamp
+    if timestamp != latest_observation + timedelta(minutes=15):
+        raise ValueError(
+            "Forecast must start 15 minutes after the latest observed energy data. "
+            "Import a current energy feed before requesting a live forecast."
+        )
+    recent = ordered[-max(LAGS + DAILY_LAGS):]
+    if any(
+        current.timestamp - previous.timestamp != timedelta(minutes=15)
+        for previous, current in zip(recent, recent[1:])
+    ):
+        raise ValueError("The recent energy history contains missing 15-minute slots.")
     history = {
         target: [float(getattr(row, target)) for row in ordered]
         for target in TARGETS
     }
-    timestamp = _round_up_to_quarter(start)
     forecasts = []
     while timestamp < end:
         values = build_runtime_feature_values(timestamp, history)
         point = {"timestamp": timestamp}
         for target in TARGETS:
-            feature_row = pd.DataFrame(
-                [values], columns=target_feature_columns(bundle, target)
-            )
-            prediction = float(bundle["models"][target].predict(feature_row)[0])
-            if target != "electricity_price":
-                prediction = max(0.0, prediction)
+            prediction = predict_target(bundle, target, values)
             history[target].append(prediction)
             point[target] = prediction
         forecasts.append(point)
@@ -158,6 +183,7 @@ def model_metadata() -> dict:
         "feature_counts_by_target": {
             target: len(target_feature_columns(bundle, target)) for target in TARGETS
         },
+        "solar_blend_weight": bundle.get("solar_blend_weight", 1.0),
     }
     if BACKTEST_PATH.exists():
         import json

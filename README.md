@@ -133,6 +133,9 @@ The optimizer uses the trained forecast when available and automatically falls
 back to the historical daily profile if the artifact cannot be loaded. The
 backtest command evaluates recursive 24-hour predictions on weekly origins from
 the held-out test period and compares them with a previous-day seasonal baseline.
+The current bundled observations end in October 2018, so the AI timeline is a
+historical demonstration. The optimizer falls back to its historical profile for
+current charging requests until a fresh 15-minute Austrian energy feed is imported.
 
 ## Controlled project data
 
