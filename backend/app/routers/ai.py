@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.database import get_db
-from app.ml.energy_forecaster import forecast_energy, model_metadata
+from app.ml.energy_forecaster import MAX_FEED_LAG, forecast_energy, model_metadata
 
 
 router = APIRouter(prefix="/ai", tags=["AI"])
@@ -118,7 +118,7 @@ def get_24h_forecast(
             - 0.15 * norm(renewable, min_r, max_r)
         )
         enhanced_slots.append({
-            "timestamp": pt["timestamp"].isoformat(),
+            "timestamp": pt["timestamp"].replace(tzinfo=timezone.utc).isoformat(),
             "electricity_price": round(price, 2),
             "grid_load": round(load, 2),
             "solar_generation": round(solar, 2),
@@ -145,12 +145,12 @@ def get_24h_forecast(
         "forecast_mode": (
             "historical_demo"
             if datetime.now(timezone.utc).replace(tzinfo=None) - latest_row.timestamp
-            > timedelta(hours=1)
+            > MAX_FEED_LAG
             else "current"
         ),
-        "last_observed_at": latest_row.timestamp.isoformat(),
-        "start_time": start_time.isoformat(),
-        "end_time": end_time.isoformat(),
+        "last_observed_at": latest_row.timestamp.replace(tzinfo=timezone.utc).isoformat(),
+        "start_time": start_time.replace(tzinfo=timezone.utc).isoformat(),
+        "end_time": end_time.replace(tzinfo=timezone.utc).isoformat(),
         "slot_count": len(enhanced_slots),
         "summary": {
             "avg_price_eur_mwh": round(sum(prices) / len(prices), 2),

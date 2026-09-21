@@ -112,10 +112,11 @@ Outputs:
 
 ### Deployment limitation
 
-The bundled Austrian observations end in October 2018. `/ai/forecast-24h` is a
-historical demonstration using the final observed timestamp. Live predictions
-and live optimization require a current, continuous 15-minute energy feed. The
-runtime refuses to treat old observations as if they were current.
+The fixed training and backtest observations end in October 2018. A separate
+Energy-Charts importer can add recent Austrian observations for inference; see
+`backend/scripts/sync_energy_charts.py`. The importer does not retrain the model.
+Live-input predictions remain unvalidated on 2026 data. When recent data is
+missing or stale, optimization uses the historical baseline instead.
 
 The deployed solar forecast is a conservative 50/50 blend of the V2 solar model
 and the previous day's same-quarter observation. Its recursive 24-hour MAE

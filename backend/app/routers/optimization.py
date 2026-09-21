@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -40,7 +40,7 @@ def run_optimization(
     try:
         forecast_rows = forecast_energy(
             energy_rows,
-            charging_request.created_at or datetime.now(),
+            charging_request.created_at or datetime.now(timezone.utc).replace(tzinfo=None),
             charging_request.departure_time,
         )
         forecast_model_name = model_metadata()["model_name"]
@@ -73,9 +73,12 @@ def run_optimization(
         saving_eur=result["saving"],
         v2g_energy_kwh=result["v2g_energy"],
         v2g_reward_eur=result["v2g_reward"],
-        start_time=result["start_time"],
-        end_time=result["end_time"],
-        slots=result["slots"],
+        start_time=result["start_time"].replace(tzinfo=timezone.utc),
+        end_time=result["end_time"].replace(tzinfo=timezone.utc),
+        slots=[
+            {**slot, "timestamp": slot["timestamp"].replace(tzinfo=timezone.utc)}
+            for slot in result["slots"]
+        ],
         wallet_balance=current_user.wallet_balance,
         reward_points=current_user.reward_points,
         forecast_source=result["forecast_source"],

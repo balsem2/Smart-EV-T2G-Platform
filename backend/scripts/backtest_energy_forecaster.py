@@ -19,6 +19,7 @@ from app.ml.energy_forecaster import (
     LAGS,
     ROLLING_WINDOWS,
     TARGETS,
+    TRAINING_CUTOFF,
     build_runtime_feature_values,
     build_feature_frame,
     predict_target,
@@ -154,7 +155,7 @@ def main() -> None:
         EnergyData.grid_load,
         EnergyData.solar_generation,
         EnergyData.wind_generation,
-    ).order_by(EnergyData.timestamp)
+    ).where(EnergyData.timestamp <= TRAINING_CUTOFF).order_by(EnergyData.timestamp)
     raw = pd.read_sql(statement, get_engine(), index_col="timestamp")
     raw.index = pd.to_datetime(raw.index)
     regular = raw.sort_index().asfreq("15min")

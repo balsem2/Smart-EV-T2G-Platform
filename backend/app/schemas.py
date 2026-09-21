@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, model_validator
@@ -120,6 +120,10 @@ class ChargingRequestCreate(BaseModel):
     def validate_soc_range(self) -> "ChargingRequestCreate":
         if self.target_soc <= self.current_soc:
             raise ValueError("target_soc must be greater than current_soc")
+        if self.departure_time.tzinfo is not None:
+            self.departure_time = self.departure_time.astimezone(timezone.utc).replace(
+                tzinfo=None
+            )
         return self
 
 

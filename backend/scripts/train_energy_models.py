@@ -14,6 +14,7 @@ from sqlalchemy import select
 from app.database import get_engine
 from app.ml.energy_forecaster import (
     TARGETS,
+    TRAINING_CUTOFF,
     SOLAR_BLEND_WEIGHT,
     build_feature_frame,
     default_feature_columns,
@@ -42,7 +43,7 @@ def main() -> None:
         EnergyData.grid_load,
         EnergyData.solar_generation,
         EnergyData.wind_generation,
-    ).order_by(EnergyData.timestamp)
+    ).where(EnergyData.timestamp <= TRAINING_CUTOFF).order_by(EnergyData.timestamp)
     raw = pd.read_sql(statement, get_engine(), index_col="timestamp")
     features, targets = build_feature_frame(raw)
 

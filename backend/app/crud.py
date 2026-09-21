@@ -1,4 +1,5 @@
 from secrets import token_hex
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -156,7 +157,11 @@ def create_charging_request(
     request_data: ChargingRequestCreate,
     user_id: int,
 ) -> ChargingRequest:
-    charging_request = ChargingRequest(user_id=user_id, **request_data.model_dump())
+    charging_request = ChargingRequest(
+        user_id=user_id,
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        **request_data.model_dump(),
+    )
     database_session.add(charging_request)
     database_session.commit()
     database_session.refresh(charging_request)

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_engine
 from app.models import EnergyData
+from app.ml.energy_forecaster import TRAINING_CUTOFF
 
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -92,7 +93,7 @@ def build_baseline(train_rows: list[EnergyData], test_rows: list[EnergyData]) ->
 
 def main() -> None:
     with Session(get_engine()) as session:
-        rows = list(session.scalars(select(EnergyData).order_by(EnergyData.timestamp)))
+        rows = list(session.scalars(select(EnergyData).where(EnergyData.timestamp <= TRAINING_CUTOFF).order_by(EnergyData.timestamp)))
     if not rows:
         raise RuntimeError("energy_data is empty")
 

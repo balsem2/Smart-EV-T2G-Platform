@@ -19,3 +19,4 @@ Thumbs.db
 # Frontend dependencies and production build
 node_modules/
 dist/
+backend/logs/

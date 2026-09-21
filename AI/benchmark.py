@@ -38,6 +38,7 @@ from AI.features import (
     solar_day_ahead_feature_columns,
 )
 from app.database import get_engine
+from app.ml.energy_forecaster import TRAINING_CUTOFF
 from app.models import EnergyData
 
 REPORTS_DIR = AI_DIR / "reports"
@@ -85,7 +86,7 @@ def run_benchmark() -> dict[str, Any]:
         EnergyData.grid_load,
         EnergyData.solar_generation,
         EnergyData.wind_generation,
-    ).order_by(EnergyData.timestamp)
+    ).where(EnergyData.timestamp <= TRAINING_CUTOFF).order_by(EnergyData.timestamp)
     raw = pd.read_sql(statement, engine, index_col="timestamp")
     print(f"Loaded {len(raw):,} observations ({raw.index.min()} to {raw.index.max()})")
 
@@ -255,9 +256,9 @@ def generate_markdown_report(summary: dict[str, Any]) -> str:
     lines.extend([
         "## Key Findings & Academic Synthesis",
         "",
-        "1. **HistGradientBoosting (V2 Production)** outperforms Ridge and Seasonal Baseline across all continuous targets, achieving near-optimal $R^2 > 0.99$ on Grid Load and Wind Generation, and reducing Price MAE by over 77% compared to historical averages.",
-        "2. **Training Efficiency**: HistGradientBoosting converges in under 5 seconds, whereas Random Forest requires significantly more memory and compute time while yielding slightly lower test fidelity on cyclical patterns.",
-        "3. **Conclusion**: HistGradientBoosting provides the optimal balance of inference speed (< 1ms per horizon), non-linear interaction capture, and day-ahead forecasting accuracy needed for real-time V1G and V2G dispatching.",
+        "1. These are one-step historical test metrics, not recursive 24-hour or current-period accuracy. See `backend/reports/ddm1/RECURSIVE_BACKTEST.md` for the deployed day-ahead test.",
+        "2. HistGradientBoosting has the lowest test MAE for price and load. Ridge is better for solar and wind on this one-step comparison; there is no universal winning architecture.",
+        "3. The deployed solar forecast is a 50/50 model/previous-day blend, which is not represented by the raw HistGradientBoosting row above. Its recursive 24-hour improvement is small and needs further validation.",
         "",
     ])
     return "\n".join(lines)

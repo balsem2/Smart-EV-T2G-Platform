@@ -66,9 +66,10 @@ Dashboard: <http://127.0.0.1:5173>
 
 ## Energy data
 
-The development database contains 131,158 complete Austrian 15-minute
+The historical training set contains 131,158 complete Austrian 15-minute
 observations from January 2015 to October 2018. Price, load, solar, and wind all
-come from the same country.
+come from the same country. Recent observations can be imported separately and
+do not change the fixed historical benchmark split.
 
 To import the complete valid Austrian history again:
 
@@ -133,9 +134,26 @@ The optimizer uses the trained forecast when available and automatically falls
 back to the historical daily profile if the artifact cannot be loaded. The
 backtest command evaluates recursive 24-hour predictions on weekly origins from
 the held-out test period and compares them with a previous-day seasonal baseline.
-The current bundled observations end in October 2018, so the AI timeline is a
-historical demonstration. The optimizer falls back to its historical profile for
-current charging requests until a fresh 15-minute Austrian energy feed is imported.
+The bundled training observations end in October 2018. To import recent Austrian
+price, load, solar and wind data from the public Energy-Charts API (CC BY 4.0),
+run from `backend`:
+
+```powershell
+..\.venv\Scripts\python.exe -m scripts.sync_energy_charts --days 10 --dry-run
+..\.venv\Scripts\python.exe -m scripts.sync_energy_charts --days 10
+..\.venv\Scripts\python.exe -m scripts.sync_energy_charts --days 10 --watch
+```
+
+The last command keeps a terminal running and refreshes every 15 minutes. The
+importer refuses incomplete, discontinuous or data delayed by over three hours.
+This is a delayed recent feed, not a real-time measurement. The optimizer falls
+back to its historical profile when recent data expires. Current observations
+do **not** establish current model accuracy: the trained model is still based on
+2015-2018 and needs prospective validation before production use.
+
+Run regression and end-to-end API tests with `pip install -r backend/requirements-dev.txt`
+and, from `backend`, `..\.venv\Scripts\python.exe -m unittest discover -s tests -v`.
+See `docs/PROJECT_REPORT.md` and `docs/DEMO_SCRIPT.md` for the report and demo.
 
 ## Controlled project data
 

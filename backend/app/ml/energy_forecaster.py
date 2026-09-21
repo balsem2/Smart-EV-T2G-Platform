@@ -15,6 +15,8 @@ TARGETS = (
     "solar_generation",
     "wind_generation",
 )
+TRAINING_CUTOFF = datetime(2018, 10, 2, 21, 30)
+MAX_FEED_LAG = timedelta(hours=3)
 CALENDAR_FEATURES = (
     "quarter_sin",
     "quarter_cos",
@@ -140,12 +142,13 @@ def forecast_energy(energy_rows, start: datetime, end: datetime) -> list[dict]:
     )
     if len(ordered) < max(LAGS + DAILY_LAGS):
         raise ValueError("At least seven days of recent energy history are required.")
-    timestamp = _round_up_to_quarter(start)
+    requested_start = _round_up_to_quarter(start)
     latest_observation = ordered[-1].timestamp
-    if timestamp != latest_observation + timedelta(minutes=15):
+    first_forecast = latest_observation + timedelta(minutes=15)
+    if not first_forecast <= requested_start <= first_forecast + MAX_FEED_LAG:
         raise ValueError(
-            "Forecast must start 15 minutes after the latest observed energy data. "
-            "Import a current energy feed before requesting a live forecast."
+            "Forecast start must be within three hours of the latest observed energy data. "
+            "Sync the current energy feed before requesting a live forecast."
         )
     recent = ordered[-max(LAGS + DAILY_LAGS):]
     if any(
@@ -158,6 +161,7 @@ def forecast_energy(energy_rows, start: datetime, end: datetime) -> list[dict]:
         for target in TARGETS
     }
     forecasts = []
+    timestamp = first_forecast
     while timestamp < end:
         values = build_runtime_feature_values(timestamp, history)
         point = {"timestamp": timestamp}
@@ -165,7 +169,8 @@ def forecast_energy(energy_rows, start: datetime, end: datetime) -> list[dict]:
             prediction = predict_target(bundle, target, values)
             history[target].append(prediction)
             point[target] = prediction
-        forecasts.append(point)
+        if timestamp >= requested_start:
+            forecasts.append(point)
         timestamp += timedelta(minutes=15)
     return forecasts
 

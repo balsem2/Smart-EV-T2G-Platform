@@ -42,6 +42,6 @@ Evaluation of candidate models on the held-out Austrian test set (19,674 quarter
 
 ## Key Findings & Academic Synthesis
 
-1. **HistGradientBoosting (V2 Production)** outperforms Ridge and Seasonal Baseline across all continuous targets, achieving near-optimal $R^2 > 0.99$ on Grid Load and Wind Generation, and reducing Price MAE by over 77% compared to historical averages.
-2. **Training Efficiency**: HistGradientBoosting converges in under 5 seconds, whereas Random Forest requires significantly more memory and compute time while yielding slightly lower test fidelity on cyclical patterns.
-3. **Conclusion**: HistGradientBoosting provides the optimal balance of inference speed (< 1ms per horizon), non-linear interaction capture, and day-ahead forecasting accuracy needed for real-time V1G and V2G dispatching.
+1. These are one-step historical test metrics, not recursive 24-hour or current-period accuracy. See `backend/reports/ddm1/RECURSIVE_BACKTEST.md` for the deployed day-ahead test.
+2. HistGradientBoosting has the lowest test MAE for price and load. Ridge is better for solar and wind on this one-step comparison; there is no universal winning architecture.
+3. The deployed solar forecast is a 50/50 model/previous-day blend, which is not represented by the raw HistGradientBoosting row above. Its recursive 24-hour improvement is small and needs further validation.

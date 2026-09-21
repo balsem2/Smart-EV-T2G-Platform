@@ -378,7 +378,7 @@ function PaymentPanel({ plan, token, payment, onPaid, savedPaymentMethod }) {
     } catch (requestError) { setError(requestError.message); } finally { setBusy(false); }
   };
 
-  if (payment) return <article className="payment-success"><span>✓</span><div><p className="eyebrow">PAYMENT CONFIRMED</p><h3>{name} is booked</h3><p>€{payment.amount.toFixed(2)} paid with card ending {payment.card_last4}.</p><small>Reference: {payment.reference}</small></div></article>;
+  if (payment) return <article className="payment-success"><span>✓</span><div><p className="eyebrow">DEMO PAYMENT CONFIRMED</p><h3>{name} demo plan confirmed</h3><p>€{payment.amount.toFixed(2)} simulated for card ending {payment.card_last4}.</p><small>Reference: {payment.reference} · No physical charger reservation was made.</small></div></article>;
 
   return <article className="payment-card"><div className="payment-summary"><div><p className="eyebrow">SELECTED PLAN</p><h3>{name}</h3><p>Advance payment confirms your charging plan.</p></div><strong>€{plan.cost_eur.toFixed(2)}</strong></div><form onSubmit={pay}>{savedPaymentMethod && <button type="button" className={`saved-card-choice ${useSaved ? "active" : ""}`} onClick={() => setUseSaved(true)}><span>{savedPaymentMethod.brand}</span><b>•••• {savedPaymentMethod.last4}</b><small>Expires {String(savedPaymentMethod.expiry_month).padStart(2, "0")}/{String(savedPaymentMethod.expiry_year).slice(-2)}</small></button>}{useSaved && savedPaymentMethod ? <button type="button" className="text-button another-card" onClick={() => setUseSaved(false)}>Use another card</button> : <><Field label="Cardholder name" value={form.cardholder} onChange={(value) => setForm({ ...form, cardholder: value })} autoComplete="cc-name" required /><Field label="Demo card number" value={form.cardNumber} onChange={(value) => setForm({ ...form, cardNumber: value })} inputMode="numeric" placeholder="4242 4242 4242 4242" autoComplete="cc-number" required /><div className="field-grid"><Field label="Expiry" value={form.expiry} onChange={(value) => setForm({ ...form, expiry: value })} placeholder="MM/YY" autoComplete="cc-exp" required /><Field label="CVC" type="password" value={form.cvc} onChange={(value) => setForm({ ...form, cvc: value })} inputMode="numeric" autoComplete="cc-csc" required /></div></>}{error && <p className="error-message">{error}</p>}<p className="payment-note">Demo payment only — full card details and CVC are never sent to or stored by Smart EV.</p><button className="primary-button" disabled={busy}>{busy ? "Confirming…" : `Pay €${plan.cost_eur.toFixed(2)} in advance`}<span>→</span></button></form></article>;
 }
@@ -417,7 +417,7 @@ function PlanView({ token, vehicles, stations, paymentMethod, results, setResult
     try {
       const stationId = Number(form.stationId);
       if (!stationId) throw new Error("No Austrian charging station is available.");
-      const chargingRequest = await api.post("/charging-requests", { vehicle_id: Number(form.vehicleId), station_id: stationId, current_soc: Number(form.currentSoc), target_soc: Number(form.targetSoc), departure_time: form.departureTime }, token);
+      const chargingRequest = await api.post("/charging-requests", { vehicle_id: Number(form.vehicleId), station_id: stationId, current_soc: Number(form.currentSoc), target_soc: Number(form.targetSoc), departure_time: new Date(form.departureTime).toISOString() }, token);
       const comparison = await Promise.all(["normal", "v1g", "v2g"].map((mode) => api.post(`/optimization/${chargingRequest.id}`, { mode }, token)));
       setResults(comparison);
       await refreshProfile();
@@ -564,6 +564,12 @@ function AIView({ token }) {
               <p className="muted">
                 Historical simulation based on Austrian observations through {forecast.last_observed_at}.
                 Live forecasts require a current energy-data feed.
+              </p>
+            )}
+            {forecast?.forecast_mode === "current" && (
+              <p className="muted">
+                Recent Austrian input through {forecast.last_observed_at}. The model was trained
+                on 2015-2018 data and has not been validated on the current period.
               </p>
             )}
           </div>

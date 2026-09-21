@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from app.models import ChargingRequest, EnergyData, Station, Vehicle
@@ -66,7 +66,7 @@ def optimize_charging(
         raise ValueError("The departure time is missing.")
 
     arrival_time = _round_up_to_quarter_hour(
-        charging_request.created_at or datetime.now()
+        charging_request.created_at or datetime.now(timezone.utc).replace(tzinfo=None)
     )
     if charging_request.departure_time <= arrival_time:
         raise ValueError("The departure time must be after the charging request.")
