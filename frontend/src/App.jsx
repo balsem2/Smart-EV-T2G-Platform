@@ -322,7 +322,7 @@ function ScheduleWindows({ slots, smart }) {
   return <div className="schedule-windows"><p>{smart ? "Recommended schedule" : "Charging schedule"}<small>Austria time</small></p>{windows.map((window, index) => <div key={`${window.action}-${window.start}-${index}`}><span className={window.action}>{window.action === "charge" ? "Charge" : "Grid export"}</span><b>{formatWindow(window)}</b></div>)}</div>;
 }
 
-function StationMap({ stations, selectedStationId, vehicle, onSelect, v2gOnly = false }) {
+function StationMap({ stations, selectedStationId, vehicle, onSelect, v2gOnly = false, hideIneligible = false }) {
   const elementRef = useRef(null);
   const mapRef = useRef(null);
   const layerRef = useRef(null);
@@ -353,7 +353,9 @@ function StationMap({ stations, selectedStationId, vehicle, onSelect, v2gOnly = 
       const connectorCompatible = connectorsAreCompatible(vehicle, station);
       const modeCompatible = !v2gOnly || station.supports_v2g;
       const available = connectorCompatible && modeCompatible && station.operational_status === "online" && station.available_chargers > 0;
+      if (hideIneligible && !available) return;
       const selected = station.id === Number(selectedStationId);
+      const showV2gMarker = v2gOnly && station.supports_v2g;
       const statusText = !connectorCompatible
         ? "Incompatible connector"
         : !modeCompatible
@@ -364,11 +366,11 @@ function StationMap({ stations, selectedStationId, vehicle, onSelect, v2gOnly = 
       const marker = L.marker([station.latitude, station.longitude], {
         icon: L.divIcon({
           className: "station-map-icon-wrap",
-          html: `<span class="station-map-icon ${available ? "available" : "disabled"} ${selected ? "selected" : ""} ${station.supports_v2g ? "v2g" : ""}">${station.supports_v2g ? "↔" : "⚡"}</span>`,
+          html: `<span class="station-map-icon ${available ? "available" : "disabled"} ${selected ? "selected" : ""} ${showV2gMarker ? "v2g" : ""}">${showV2gMarker ? "↔" : "⚡"}</span>`,
           iconSize: [34, 34], iconAnchor: [17, 17],
         }),
       }).addTo(layer);
-      marker.bindTooltip(`<b>${station.station_name || "Station"}</b><br>${station.city || ""} · ${statusText}${station.supports_v2g ? " · V2G" : ""}`);
+      marker.bindTooltip(`<b>${station.station_name || "Station"}</b><br>${station.city || ""} · ${statusText}${v2gOnly && station.supports_v2g ? " · V2G" : ""}`);
       if (available) marker.on("click", () => onSelect(station.id));
       coordinates.push([station.latitude, station.longitude]);
     });
@@ -376,9 +378,9 @@ function StationMap({ stations, selectedStationId, vehicle, onSelect, v2gOnly = 
       map.fitBounds(coordinates, { padding: [30, 30], maxZoom: 8 });
       map._smartEvFitted = true;
     }
-  }, [stations, selectedStationId, vehicle, onSelect, v2gOnly]);
+  }, [stations, selectedStationId, vehicle, onSelect, v2gOnly, hideIneligible]);
 
-  return <article className="content-card station-map-card"><div className="card-heading"><div><p className="eyebrow">{v2gOnly ? "V2G STATION MAP" : "STATION MAP"}</p><h3>{v2gOnly ? "Choose where to export energy" : "Choose a compatible station"}</h3></div><span className="map-legend">{v2gOnly ? <><i className="v2g" /> V2G export available <i className="unavailable" /> Not eligible</> : <><i /> Available <i className="v2g" /> V2G</>}</span></div><div className="station-map-wrap"><div className="station-map" ref={elementRef} />{tilesUnavailable && <div className="map-offline-note"><b>Map background unavailable</b><span>Station markers and the selector below still work.</span></div>}</div><p className="planning-window-note">{v2gOnly ? "Blue stations support bidirectional export and match your selected vehicle. Grey stations are charging-only, unavailable, or connector-incompatible." : "Grey stations cannot be selected because they are unavailable or their connector is incompatible with your vehicle."}</p></article>;
+  return <article className="content-card station-map-card"><div className="card-heading"><div><p className="eyebrow">{v2gOnly ? "V2G STATION MAP" : "CHARGING STATION MAP"}</p><h3>{v2gOnly ? "Choose where to export energy" : "Choose where to charge"}</h3></div><span className="map-legend">{v2gOnly ? <><i className="v2g" /> V2G export available <i className="unavailable" /> Not eligible</> : <><i /> Compatible and available</>}</span></div><div className="station-map-wrap"><div className="station-map" ref={elementRef} />{tilesUnavailable && <div className="map-offline-note"><b>Map background unavailable</b><span>Station markers still show where you can charge.</span></div>}</div><p className="planning-window-note">{v2gOnly ? "Blue stations support bidirectional export and match your selected vehicle. Grey stations are charging-only, unavailable, or connector-incompatible." : "Only online stations with a free charger and a connector compatible with your selected vehicle are shown. Choose the station directly on the map."}</p></article>;
 }
 
 function NotificationCenter({ token, notifications, setNotifications }) {
@@ -744,17 +746,17 @@ function PlanView({ token, vehicles, stations, paymentMethod, rewardPoints, resu
 
   return (
     <section className="view-stack">
-      <StationMap stations={stations} selectedStationId={form.stationId} vehicle={selectedVehicle} onSelect={(stationId) => setForm((current) => ({ ...current, stationId }))} />
+      <StationMap stations={stations} selectedStationId={form.stationId} vehicle={selectedVehicle} onSelect={(stationId) => setForm((current) => ({ ...current, stationId }))} hideIneligible />
       <div className="planner-grid">
         <form className="content-card planner-card" onSubmit={submit}>
           <div className="card-heading"><div><p className="eyebrow">NEW SESSION</p><h3>Charging preferences</h3></div><span className="step-pill">01</span></div>
           <Field label="Vehicle"><select value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}>{vehicles.length ? vehicles.map((v) => <option key={v.id} value={v.id}>{v.model} · {v.battery_capacity} kWh · {v.connector_types}</option>) : <option value="">No vehicle added</option>}</select></Field>
-          <Field label="Charging station"><select value={form.stationId} onChange={(e) => setForm({ ...form, stationId: e.target.value })}>{!recommendedStation && <option value="">No compatible available station</option>}{rankedStations.length ? rankedStations.map((s) => { const compatible = connectorsAreCompatible(selectedVehicle, s); const unavailable = s.operational_status !== "online" || s.available_chargers < 1; return <option key={s.id} value={s.id} disabled={!compatible || unavailable}>{s.id === recommendedStation?.id ? "Recommended · " : ""}{s.station_name} · {s.city} · {s.charger_type} · {!compatible ? "Not compatible" : unavailable ? "Unavailable" : `${s.available_chargers}/${s.total_chargers} free`}</option>; }) : <option value="">No station available</option>}</select></Field>
-          {selectedStation && <div className={`station-status ${selectedStation.operational_status === "online" && selectedStation.available_chargers > 0 ? "available" : "unavailable"}`}><i /><div><b>{selectedStation.available_chargers} of {selectedStation.total_chargers} chargers available</b><small>{selectedStation.power_kw} kW · {selectedStation.charger_type} · {selectedStation.availability_source === "simulated" ? "Demo estimate, not live occupancy" : `${selectedStation.availability_source} status · updated ${selectedStation.last_status_at ? new Date(selectedStation.last_status_at).toLocaleString() : "unknown"}`}</small></div></div>}
+          <Field label="Station selected on map"><input value={selectedStation ? `${selectedStation.station_name} · ${selectedStation.city}` : "Choose an available station on the map"} disabled /></Field>
+          {selectedStation && <div className="station-status available"><i /><div><b>{selectedStation.available_chargers} of {selectedStation.total_chargers} chargers available</b><small>{selectedStation.power_kw} kW · {selectedStation.charger_type} · {selectedStation.availability_source === "simulated" ? "Demo estimate, not live occupancy" : `${selectedStation.availability_source} status · updated ${selectedStation.last_status_at ? new Date(selectedStation.last_status_at).toLocaleString() : "unknown"}`}</small></div></div>}
           <div className="field-grid"><Field label="Current SoC (%)" type="number" value={form.currentSoc} onChange={(v) => setForm({ ...form, currentSoc: v })} min="0" max="99" /><Field label="Target SoC (%)" type="number" value={form.targetSoc} onChange={(v) => setForm({ ...form, targetSoc: v })} min="1" max="100" /></div>
           <div className="field-grid planning-dates"><Field label="Car available from (you choose)" type="datetime-local" value={form.startTime} onChange={(v) => setForm({ ...form, startTime: v })} /><Field label="Car must be ready by (you choose)" type="datetime-local" value={form.departureTime} onChange={(v) => setForm({ ...form, departureTime: v })} /></div>
           <p className="planning-window-note">You choose the dates. Smart EV chooses one exact continuous charging time inside this window and shows it before payment.</p>
-          <button className="primary-button" disabled={busy}>{busy ? "Optimizing…" : "Build my smart plan"}<span>→</span></button>
+          <button className="primary-button" disabled={busy || !form.stationId}>{busy ? "Optimizing…" : "Build my smart plan"}<span>→</span></button>
         </form>
         <article className="insight-card"><p className="eyebrow">{results[0]?.forecast_source === "machine_learning" ? "SMART FORECAST READY" : "AUSTRIAN ENERGY DATA"}</p><h3>A better time<br />to charge.</h3><p>Smart EV compares the available times before your departure and recommends a period with a better price, less grid pressure and more clean energy.</p><div className="formula"><span>Price</span><span>Grid activity</span><span>Clean energy</span></div>{results[0] && <small className="model-label">Recommendation calculated automatically</small>}</article>
       </div>
