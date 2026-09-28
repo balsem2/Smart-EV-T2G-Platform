@@ -8,12 +8,14 @@ joined by UTC timestamp, never by row position.
 from __future__ import annotations
 
 import argparse
+from http.client import IncompleteRead
 import json
 import math
 import time
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 from scripts.import_energy_data import import_rows
 from app.ml.energy_forecaster import MAX_FEED_LAG
@@ -32,9 +34,20 @@ def utc_naive(value: str) -> datetime:
 
 def fetch_series(path: str, params: dict[str, str]) -> dict:
     url = f"{BASE_URL}/{path}?{urlencode(params)}"
-    request = Request(url, headers={"User-Agent": "Smart-EV-academic-project/1.0"})
-    with urlopen(request, timeout=30) as response:
-        payload = json.load(response)
+    payload = None
+    last_error = None
+    for attempt in range(1, 4):
+        request = Request(url, headers={"User-Agent": "Smart-EV-academic-project/1.0"})
+        try:
+            with urlopen(request, timeout=45) as response:
+                payload = json.load(response)
+            break
+        except (IncompleteRead, HTTPError, URLError, TimeoutError, json.JSONDecodeError) as error:
+            last_error = error
+            if attempt < 3:
+                time.sleep(attempt * 2)
+    if payload is None:
+        raise RuntimeError(f"Could not download {path} after 3 attempts: {last_error}") from last_error
     if payload.get("country", "at").lower() != "at":
         raise ValueError(f"Unexpected country in {path} response")
     if payload.get("interval_minutes") != 15:
