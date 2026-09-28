@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import ping_database
-from app.routers import ai, auth, catalog, charging_requests, optimization, payments, profile, stations, vehicles
+from app.routers import ai, auth, catalog, charging_requests, notifications, operator, optimization, payments, profile, reservations, stations, v2g_offers, vehicles
 
 
 app = FastAPI(
@@ -14,7 +14,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://smart-ev.localhost:5173",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -26,9 +30,13 @@ app.include_router(profile.router)
 app.include_router(catalog.router)
 app.include_router(vehicles.router)
 app.include_router(stations.router)
+app.include_router(v2g_offers.router)
 app.include_router(charging_requests.router)
 app.include_router(optimization.router)
 app.include_router(payments.router)
+app.include_router(reservations.router)
+app.include_router(notifications.router)
+app.include_router(operator.router)
 
 
 @app.get("/health", tags=["System"])

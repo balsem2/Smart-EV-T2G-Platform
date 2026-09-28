@@ -1,3 +1,4 @@
+from math import floor
 from secrets import token_hex
 from datetime import datetime, timezone
 
@@ -11,9 +12,12 @@ from app.models import (
     EnergyData,
     Payment,
     PaymentMethod,
+    Notification,
+    Reservation,
     Station,
+    StationAvailabilityObservation,
     User,
-    V2GTransaction,
+    RewardEvent,
     Vehicle,
     VehicleCatalog,
 )
@@ -61,7 +65,7 @@ def list_vehicles(
     user_id: int | None = None,
 ) -> list[Vehicle]:
     """Return all vehicles, optionally filtered by owner."""
-    statement = select(Vehicle).order_by(Vehicle.id)
+    statement = select(Vehicle).where(Vehicle.active.is_(True)).order_by(Vehicle.id)
     if user_id is not None:
         statement = statement.where(Vehicle.user_id == user_id)
     return list(database_session.scalars(statement))
@@ -81,7 +85,9 @@ def create_vehicle(
         catalog_id=catalog_vehicle.id,
         model=catalog_vehicle.model,
         battery_capacity=catalog_vehicle.battery_capacity,
+        connector_types=catalog_vehicle.connector_types,
         vehicle_age=vehicle_data.vehicle_age,
+        supports_v2g=catalog_vehicle.supports_v2g,
     )
     database_session.add(vehicle)
     user = database_session.get(User, user_id)
@@ -94,6 +100,12 @@ def create_vehicle(
 
 def get_vehicle(database_session: Session, vehicle_id: int) -> Vehicle | None:
     return database_session.get(Vehicle, vehicle_id)
+
+
+def remove_vehicle(database_session: Session, vehicle: Vehicle) -> None:
+    """Hide a vehicle from the garage while preserving its charging history."""
+    vehicle.active = False
+    database_session.commit()
 
 
 def list_vehicle_catalog(database_session: Session) -> list[VehicleCatalog]:
@@ -126,6 +138,15 @@ def update_station_status(
     for field, value in status_data.model_dump().items():
         setattr(station, field, value)
     station.last_status_at = func.now()
+    database_session.add(
+        StationAvailabilityObservation(
+            station_id=station.id,
+            total_chargers=status_data.total_chargers,
+            available_chargers=status_data.available_chargers,
+            operational_status=status_data.operational_status,
+            source=status_data.availability_source,
+        )
+    )
     database_session.commit()
     database_session.refresh(station)
     return station
@@ -207,11 +228,14 @@ def save_optimization(
     schedule = ChargingSchedule(
         request_id=request_id,
         mode=result["mode"],
+        variant=result["variant"],
         start_time=result["start_time"],
         end_time=result["end_time"],
         energy=result["energy_needed"],
         cost=result["cost"],
         saving=result["saving"],
+        v2g_energy_kwh=result["v2g_energy"],
+        v2g_reward_eur=result["v2g_reward"],
     )
     database_session.add_all([prediction, schedule])
     database_session.flush()
@@ -225,6 +249,11 @@ def create_payment(
     database_session: Session,
     user_id: int,
     payment_data,
+    *,
+    provider: str = "local_demo",
+    provider_session_id: str | None = None,
+    invoice_url: str | None = None,
+    invoice_pdf: str | None = None,
 ) -> Payment:
     schedule = database_session.get(ChargingSchedule, payment_data.schedule_id)
     if schedule is None:
@@ -238,6 +267,59 @@ def create_payment(
     if existing is not None:
         raise RuntimeError("This charging plan has already been paid.")
 
+    reservation = None
+    if (
+        charging_request.vehicle_id is not None
+        and charging_request.station_id is not None
+        and schedule.start_time is not None
+        and schedule.end_time is not None
+    ):
+        station = database_session.get(Station, charging_request.station_id)
+        if station is None or not station.active or station.operational_status != "online":
+            raise RuntimeError("The selected station is not available for reservation.")
+        concurrent = database_session.scalar(
+            select(func.count(Reservation.id)).where(
+                Reservation.station_id == station.id,
+                Reservation.status == "confirmed",
+                Reservation.start_time < schedule.end_time,
+                Reservation.end_time > schedule.start_time,
+            )
+        ) or 0
+        if concurrent >= station.total_chargers:
+            raise RuntimeError("This station is fully booked for the selected time.")
+        reservation = Reservation(
+            user_id=user_id,
+            vehicle_id=charging_request.vehicle_id,
+            station_id=station.id,
+            schedule_id=schedule.id,
+            start_time=schedule.start_time,
+            end_time=schedule.end_time,
+            status="confirmed",
+        )
+        database_session.add(reservation)
+        database_session.flush()
+        create_notification(
+            database_session,
+            user_id=user_id,
+            notification_type="reservation",
+            title="Charging station reserved",
+            message=f"{station.station_name or 'Station'} is reserved for your selected charging time.",
+            related_entity_type="reservation",
+            related_entity_id=reservation.id,
+        )
+
+    user = database_session.get(User, user_id)
+    if user is None:
+        raise ValueError("User not found.")
+    original_amount = round(max(schedule.cost or 0, 0), 2)
+    points_redeemed = 0
+    if payment_data.redeem_points:
+        affordable_bundles = floor(original_amount)
+        available_bundles = user.reward_points // 100
+        points_redeemed = min(affordable_bundles, available_bundles) * 100
+    points_discount_eur = round(points_redeemed / 100, 2)
+    amount_due = round(original_amount - points_discount_eur, 2)
+
     card_last4 = payment_data.card_last4
     if payment_data.payment_method == "saved_card":
         saved_method = database_session.get(PaymentMethod, payment_data.payment_method_id)
@@ -248,18 +330,116 @@ def create_payment(
     payment = Payment(
         schedule_id=schedule.id,
         user_id=user_id,
-        amount=round(schedule.cost or 0, 2),
+        original_amount=original_amount,
+        amount=amount_due,
+        points_redeemed=points_redeemed,
+        points_discount_eur=points_discount_eur,
         currency="EUR",
         payment_method=payment_data.payment_method,
         card_last4=card_last4,
         status="paid",
         reference=f"SEV-{token_hex(6).upper()}",
+        provider=provider,
+        provider_session_id=provider_session_id,
+        invoice_url=invoice_url,
+        invoice_pdf=invoice_pdf,
     )
     schedule.status = "confirmed"
     database_session.add(payment)
+    user.reward_points -= points_redeemed
+    if schedule.mode == "v2g":
+        credit_demo_v2g_reward(database_session, schedule, user_id)
+    elif schedule.mode == "v1g":
+        credit_demo_v1g_points(database_session, schedule, user_id)
     database_session.commit()
     database_session.refresh(payment)
     return payment
+
+
+def create_notification(
+    database_session: Session,
+    user_id: int,
+    notification_type: str,
+    title: str,
+    message: str,
+    related_entity_type: str | None = None,
+    related_entity_id: int | None = None,
+) -> Notification:
+    notification = Notification(
+        user_id=user_id,
+        type=notification_type,
+        title=title,
+        message=message,
+        related_entity_type=related_entity_type,
+        related_entity_id=related_entity_id,
+    )
+    database_session.add(notification)
+    return notification
+
+
+def credit_demo_v2g_reward(
+    database_session: Session,
+    schedule: ChargingSchedule,
+    user_id: int,
+) -> RewardEvent:
+    """Credit one simulated V2G quote; caller commits payment and reward together."""
+    if schedule.mode != "v2g" or schedule.v2g_energy_kwh <= 0:
+        raise RuntimeError("This V2G plan has no saved reward quote. Build a new plan.")
+    existing = database_session.scalar(
+        select(RewardEvent).where(RewardEvent.schedule_id == schedule.id)
+    )
+    if existing is not None:
+        raise RuntimeError("This V2G reward has already been credited.")
+    user = database_session.get(User, user_id)
+    if user is None:
+        raise ValueError("User not found.")
+    reward_eur = round(max(schedule.v2g_reward_eur, 0), 2)
+    points = floor(schedule.v2g_energy_kwh * 10 + 0.5)
+    transaction = RewardEvent(
+        schedule_id=schedule.id,
+        reward_type="v2g_export",
+        energy_returned=schedule.v2g_energy_kwh,
+        reward=reward_eur,
+        saving_eur=0,
+        points=points,
+    )
+    database_session.add(transaction)
+    user.wallet_balance = round(user.wallet_balance + reward_eur, 2)
+    user.reward_points += points
+    return transaction
+
+
+def credit_demo_v1g_points(
+    database_session: Session,
+    schedule: ChargingSchedule,
+    user_id: int,
+) -> RewardEvent | None:
+    """Award one point per euro cent saved by a confirmed Smart V1G demo plan."""
+    if schedule.mode != "v1g":
+        raise ValueError("This is not a Smart V1G plan.")
+    existing = database_session.scalar(
+        select(RewardEvent).where(RewardEvent.schedule_id == schedule.id)
+    )
+    if existing is not None:
+        raise RuntimeError("This Smart V1G reward has already been credited.")
+    saved_eur = round(max(schedule.saving or 0, 0), 2)
+    points = floor(saved_eur * 100 + 0.5)
+    if points == 0:
+        return None
+    user = database_session.get(User, user_id)
+    if user is None:
+        raise ValueError("User not found.")
+    event = RewardEvent(
+        schedule_id=schedule.id,
+        reward_type="v1g_saving",
+        energy_returned=None,
+        reward=0,
+        saving_eur=saved_eur,
+        points=points,
+    )
+    database_session.add(event)
+    user.reward_points += points
+    return event
 
 
 def update_user(
@@ -270,6 +450,8 @@ def update_user(
     changes = user_data.model_dump(exclude_unset=True)
     if "email" in changes:
         changes["email"] = str(changes["email"]).lower()
+        if changes["email"] != user.email:
+            user.email_verified_at = None
     for field, value in changes.items():
         setattr(user, field, value)
     database_session.commit()
@@ -325,12 +507,12 @@ def save_default_payment_method(
 def list_user_rewards(
     database_session: Session,
     user_id: int,
-) -> list[V2GTransaction]:
+) -> list[RewardEvent]:
     statement = (
-        select(V2GTransaction)
-        .join(ChargingSchedule, V2GTransaction.schedule_id == ChargingSchedule.id)
+        select(RewardEvent)
+        .join(ChargingSchedule, RewardEvent.schedule_id == ChargingSchedule.id)
         .join(ChargingRequest, ChargingSchedule.request_id == ChargingRequest.id)
         .where(ChargingRequest.user_id == user_id)
-        .order_by(V2GTransaction.transaction_time.desc())
+        .order_by(RewardEvent.transaction_time.desc())
     )
     return list(database_session.scalars(statement))

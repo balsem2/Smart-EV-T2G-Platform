@@ -1,5 +1,14 @@
 # Smart EV - Transportation-to-Grid Platform
 
+Local development URLs:
+
+- Web app: `http://smart-ev.localhost:5173`
+- API: `http://api.smart-ev.localhost:8000`
+- API documentation: `http://api.smart-ev.localhost:8000/docs`
+
+The `.localhost` domain is reserved for local development and resolves to the
+current computer without changing the Windows hosts file.
+
 Academic full-stack prototype that compares normal EV charging, smart V1G charging,
 and simulated V2G operation using electricity price, grid load, solar generation,
 and wind generation.
@@ -24,11 +33,11 @@ FastAPI REST API
 1. Register or log in to a personal account.
 2. Complete the mandatory first-login onboarding by selecting an EV from the
    controlled dataset catalogue.
-3. Select one of the preloaded Austrian charging stations.
+3. Select a compatible Austrian station directly from the interactive map.
 4. Submit current SoC, target SoC, and departure time.
-5. Compare normal, V1G, and V2G strategies.
-6. Display cost, savings, V2G reward, and the selected time slots.
-7. Select one quoted plan and confirm a simulated advance card payment.
+5. Compare normal and V1G charging, then pay in advance to reserve the exact slot.
+6. Use the separate V2G service only with a configured bidirectional vehicle and station.
+7. Follow reservation, operator and meter-confirmation events from notifications.
 
 Station availability is updated through a protected status endpoint. A local
 station simulator can produce the same events that a future OCPP adapter would
@@ -99,13 +108,65 @@ Negative electricity prices are preserved because they are valid market events.
 | GET/POST | `/charging-requests` | List or create charging needs |
 | POST | `/optimization/{request_id}` | Run normal, V1G, or V2G optimization |
 | POST | `/payments/checkout` | Confirm an advance demo payment for one plan |
+| POST | `/payments/stripe/checkout-session` | Start a Stripe-hosted test checkout |
+| POST | `/payments/stripe/confirm/{session_id}` | Verify a returned Stripe test payment |
+| GET | `/payments`, `/payments/{id}/invoice` | Payment and invoice history |
+| POST | `/auth/verify-email`, `/auth/resend-verification` | Email verification |
+| POST | `/auth/forgot-password`, `/auth/reset-password` | Expiring password reset flow |
+| GET/DELETE | `/reservations` | List or cancel the authenticated user's reservations |
+| GET/PATCH | `/notifications` | List and acknowledge account notifications |
+| POST | `/v2g-offers` | Request a compatibility-checked V2G grid offer |
+| GET | `/operator/dashboard` | View bookings and V2G jobs for one managed station |
 | GET | `/ai/model-info` | Inspect the trained forecasting model and metrics |
+
+Migration `018_reservations_v2g_operator_notifications.sql` adds the required
+tables and capability flags. For the academic operator console, run:
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m scripts.seed_demo_operator
+```
+
+The local demonstration account is `operator@smart-ev.at` with password
+`SmartEV-Operator-2026`. Change or remove it before any non-local deployment.
+
+## Stripe test checkout and email
+
+Add a Stripe **test-mode** secret key to `backend/.env` to enable hosted test
+checkout and Stripe invoice creation:
+
+```env
+STRIPE_SECRET_KEY=sk_test_...
+FRONTEND_URL=http://smart-ev.localhost:5173
+```
+
+Use Stripe's documented test card `4242 4242 4242 4242`, a future expiry date
+and any CVC on the Stripe-hosted page. Never enter a real card in test mode.
+Without a Stripe key, Smart EV keeps the local academic checkout available.
+
+Email verification tokens expire after 24 hours and password-reset tokens after
+30 minutes; both are single-use. Configure the `SMTP_*` variables in
+`backend/.env` to send real emails. With no SMTP in development, the interface
+receives a local development token so the complete flow remains testable.
+
+For a confirmed **V2G demo** plan, checkout credits the quoted simulated
+export reward to the demo wallet and 10 points per simulated kWh. Normal and
+Smart V1G plans do not earn V2G rewards. This is a software simulation:
+reservations are stored by the platform, but no physical charger is controlled
+and no real-money transfer occurs.
+Smart V1G separately earns one point per euro cent saved. At checkout, users
+may redeem points in bundles of 100 (`100 points = EUR 1`) as a discount on a
+new demo charging plan; points cannot be withdrawn as real money.
+Existing plans made before migration `009_v2g_reward_quotes.sql` lack a saved
+reward quote and cannot be credited automatically without reconstructing and
+verifying the original quote.
 
 ## Optimization logic
 
 The optimizer calculates the required energy from battery capacity and the SoC
-difference. It builds an average daily 15-minute profile and ranks candidate slots
-using:
+difference. Users choose both an earliest charging start and a ready-by deadline,
+so future sessions can be planned from home. It builds an average daily 15-minute
+profile and ranks candidate slots using:
 
 ```text
 55% electricity price + 30% grid load - 15% renewable availability
@@ -114,27 +175,34 @@ using:
 Normal charging uses the earliest slots. V1G selects the lowest-score slots. V2G
 adds a limited export during a high-value slot and includes the resulting reward.
 The V2G result is a simulation and does not control physical charging hardware.
+Smart V1G and V2G each return three selectable variants: balanced, lowest cost,
+and greenest. Every option shows its exact Austrian-time charging windows before
+the user confirms the demo reservation and payment.
 
 ## AI energy forecasting
 
-The DDM1 pipeline imports 131,158 complete Austrian 15-minute observations,
-audits quality, creates a chronological 70/15/15 split, and measures a daily
-profile baseline. Four HistGradientBoosting models forecast price, grid load,
-solar generation, and wind generation from cyclical calendar, lag, and rolling
-features. Training artifacts and metrics are generated with:
+The DDM1 pipeline contains 131,158 complete Austrian 15-minute observations.
+V3 enriches them with regional-average Open-Meteo temperature, cloud cover,
+solar radiation, 100 m wind and precipitation. It uses a chronological 70/15/15
+split and direct horizons from 15 minutes to 24 hours, so one prediction is not
+fed recursively into the next. Ridge and HistGradientBoosting compete separately
+for each energy target; the validation winner is tested on later unseen data.
+Quantile models also provide an empirical 80% prediction interval.
+
+Training artifacts and metrics are generated with:
 
 ```powershell
 cd backend
 ..\.venv\Scripts\python.exe -m scripts.analyze_energy_data
-..\.venv\Scripts\python.exe -m scripts.train_energy_models
-..\.venv\Scripts\python.exe -m scripts.backtest_energy_forecaster
+..\.venv\Scripts\python.exe -m scripts.sync_weather --start 2015-01-01 --end 2018-10-03
+..\.venv\Scripts\python.exe -m scripts.train_direct_energy_models
 ```
 
 The optimizer uses the trained forecast when available and automatically falls
 back to the historical daily profile if the artifact cannot be loaded. The
-backtest command evaluates recursive 24-hour predictions on weekly origins from
-the held-out test period and compares them with a previous-day seasonal baseline.
-The bundled training observations end in October 2018. To import recent Austrian
+bundled continuous training observations end in October 2018. Recent rows are
+kept in a separate continuous segment until enough have accumulated for safe
+retraining; the multi-year gap is never silently interpolated. To import recent Austrian
 price, load, solar and wind data from the public Energy-Charts API (CC BY 4.0),
 run from `backend`:
 
@@ -166,6 +234,27 @@ come from Austria's national E-Control Ladestellenverzeichnis. This keeps the
 station context consistent with the Austrian price, load, solar, and wind data.
 
 ## Station availability simulator
+
+The current charger counts are **demo estimates**, not live occupancy. The
+station CSV contains locations and charging power, but no live connector counts.
+The frontend labels simulated counts accordingly. Do not treat the demo counts
+as a real-world reservation or guaranteed availability.
+
+E-Control publishes a [public charging-station API](https://www.e-control.at/ladestellenverzeichnis-technische-informationen)
+with live status. To prepare access, register an API key and a domain at
+https://admin.ladestellen.at/#/api/registrieren, then set `ECONTROL_API_KEY`
+and `ECONTROL_REFERER` (the exact registered HTTPS domain) in `backend/.env`.
+Do not commit the key. Verify access with:
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m scripts.check_econtrol_access
+```
+
+This probe calls E-Control's documented `/search` endpoint and reports only
+the response structure. It does **not** update station availability. The
+response schema and identifier mapping still need confirmation from an
+authenticated sample before the live feed can safely replace simulation.
 
 With the API running, send one simulated update for every active station:
 

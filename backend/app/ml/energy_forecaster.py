@@ -160,6 +160,56 @@ def forecast_energy(energy_rows, start: datetime, end: datetime) -> list[dict]:
         target: [float(getattr(row, target)) for row in ordered]
         for target in TARGETS
     }
+    if bundle.get("model_type") == "direct_multi_horizon":
+        from app.ml.direct_forecaster import MAX_HORIZON, build_direct_runtime_values
+        from app.ml.weather import WEATHER_FIELDS, forecast_weather
+
+        weather_by_timestamp = {}
+        now = datetime.now().replace(tzinfo=None)
+        if first_forecast >= now - timedelta(days=5):
+            try:
+                weather_by_timestamp = forecast_weather(first_forecast, end)
+            except Exception:
+                # The API remains usable offline through the training climatology.
+                weather_by_timestamp = {}
+        forecasts = []
+        timestamp = first_forecast
+        horizon_step = 1
+        while timestamp < end:
+            quarter = timestamp.hour * 4 + timestamp.minute // 15
+            weather = weather_by_timestamp.get(timestamp)
+            if weather is None:
+                weather = bundle["weather_climatology"][f"{timestamp.month}-{quarter}"]
+            values = build_direct_runtime_values(
+                timestamp,
+                min(horizon_step, MAX_HORIZON),
+                history,
+                weather,
+            )
+            feature_row = pd.DataFrame([values], columns=bundle["feature_columns"])
+            point = {"timestamp": timestamp, "weather_source": "forecast" if timestamp in weather_by_timestamp else "climatology"}
+            confidence_values = []
+            for target in TARGETS:
+                prediction = float(bundle["models"][target].predict(feature_row)[0])
+                lower = float(bundle["lower_models"][target].predict(feature_row)[0])
+                upper = float(bundle["upper_models"][target].predict(feature_row)[0])
+                lower, upper = min(lower, upper), max(lower, upper)
+                correction = bundle.get("interval_corrections", {}).get(target, 0.0)
+                lower, upper = lower - correction, upper + correction
+                if target != "electricity_price":
+                    prediction, lower, upper = max(0.0, prediction), max(0.0, lower), max(0.0, upper)
+                point[target] = prediction
+                point[f"{target}_lower"] = lower
+                point[f"{target}_upper"] = upper
+                scale = max(abs(prediction), 1.0)
+                confidence_values.append(max(0.0, 1.0 - (upper - lower) / (2 * scale)))
+            point["confidence"] = sum(confidence_values) / len(confidence_values)
+            if timestamp >= requested_start:
+                forecasts.append(point)
+            timestamp += timedelta(minutes=15)
+            horizon_step += 1
+        return forecasts
+
     forecasts = []
     timestamp = first_forecast
     while timestamp < end:
@@ -188,6 +238,9 @@ def model_metadata() -> dict:
         "feature_counts_by_target": {
             target: len(target_feature_columns(bundle, target)) for target in TARGETS
         },
+        "model_type": bundle.get("model_type", "recursive"),
+        "interval_coverage_target": bundle.get("interval_coverage_target"),
+        "evaluation_samples": bundle.get("evaluation_samples", {}),
         "solar_blend_weight": bundle.get("solar_blend_weight", 1.0),
     }
     if BACKTEST_PATH.exists():

@@ -24,6 +24,9 @@ class UserRead(BaseModel):
     reward_points: int
     theme: Literal["light", "dark", "system"]
     onboarding_completed: bool
+    role: Literal["driver", "operator", "admin"] = "driver"
+    managed_station_id: int | None = None
+    email_verified: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -45,7 +48,9 @@ class VehicleRead(BaseModel):
     catalog_id: int | None
     model: str | None
     battery_capacity: float | None
+    connector_types: str | None
     vehicle_age: float | None
+    supports_v2g: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -77,6 +82,7 @@ class StationRead(BaseModel):
     operational_status: Literal["online", "offline", "maintenance"]
     availability_source: Literal["simulated", "live", "manual"]
     last_status_at: datetime | None
+    supports_v2g: bool = False
 
     @computed_field
     @property
@@ -105,6 +111,8 @@ class VehicleCatalogRead(BaseModel):
     id: int
     model: str
     battery_capacity: float
+    connector_types: str
+    supports_v2g: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -114,16 +122,23 @@ class ChargingRequestCreate(BaseModel):
     station_id: int = Field(gt=0)
     current_soc: float = Field(ge=0, le=100)
     target_soc: float = Field(gt=0, le=100)
+    earliest_start_time: datetime | None = None
     departure_time: datetime
 
     @model_validator(mode="after")
     def validate_soc_range(self) -> "ChargingRequestCreate":
         if self.target_soc <= self.current_soc:
             raise ValueError("target_soc must be greater than current_soc")
+        if self.earliest_start_time is not None and self.earliest_start_time.tzinfo is not None:
+            self.earliest_start_time = self.earliest_start_time.astimezone(timezone.utc).replace(
+                tzinfo=None
+            )
         if self.departure_time.tzinfo is not None:
             self.departure_time = self.departure_time.astimezone(timezone.utc).replace(
                 tzinfo=None
             )
+        if self.earliest_start_time is not None and self.departure_time <= self.earliest_start_time:
+            raise ValueError("departure_time must be after earliest_start_time")
         return self
 
 
@@ -134,6 +149,7 @@ class ChargingRequestRead(BaseModel):
     station_id: int | None
     current_soc: float | None
     target_soc: float | None
+    earliest_start_time: datetime | None
     departure_time: datetime | None
     created_at: datetime | None
 
@@ -142,6 +158,83 @@ class ChargingRequestRead(BaseModel):
 
 class OptimizationRun(BaseModel):
     mode: Literal["normal", "v1g", "v2g"] = "v1g"
+    variant: Literal["balanced", "lowest_cost", "greenest"] = "balanced"
+
+
+class V2GOfferCreate(BaseModel):
+    vehicle_id: int = Field(gt=0)
+    station_id: int = Field(gt=0)
+    current_soc: float = Field(gt=0, le=100)
+    minimum_soc: float = Field(ge=0, lt=100)
+    available_until: datetime
+
+    @model_validator(mode="after")
+    def validate_reserve(self) -> "V2GOfferCreate":
+        if self.current_soc <= self.minimum_soc:
+            raise ValueError("Current SoC must be above the minimum battery reserve.")
+        if self.available_until.tzinfo is not None:
+            self.available_until = self.available_until.astimezone(timezone.utc).replace(tzinfo=None)
+        return self
+
+
+class V2GOfferRead(BaseModel):
+    id: int
+    vehicle_id: int
+    station_id: int
+    current_soc: float
+    minimum_soc: float
+    export_energy_kwh: float
+    reward_eur: float
+    export_start: datetime
+    export_end: datetime
+    delivered_energy_kwh: float | None
+    credited_reward_eur: float | None
+    status: Literal["offered", "accepted", "completed", "declined"]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class V2GDeliveryConfirmation(BaseModel):
+    delivered_energy_kwh: float = Field(gt=0)
+
+
+class ReservationRead(BaseModel):
+    id: int
+    user_id: int
+    vehicle_id: int
+    station_id: int
+    schedule_id: int
+    start_time: datetime
+    end_time: datetime
+    status: Literal["confirmed", "completed", "cancelled"]
+    created_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReservationStatusUpdate(BaseModel):
+    status: Literal["confirmed", "completed", "cancelled"]
+
+
+class NotificationRead(BaseModel):
+    id: int
+    type: str
+    title: str
+    message: str
+    related_entity_type: str | None
+    related_entity_id: int | None
+    read_at: datetime | None
+    created_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OperatorDashboardRead(BaseModel):
+    station: StationRead
+    reservations: list[ReservationRead]
+    v2g_offers: list[V2GOfferRead]
+    confirmed_reservations: int
+    pending_v2g_deliveries: int
 
 
 class OptimizationSlot(BaseModel):
@@ -156,9 +249,11 @@ class OptimizationResult(BaseModel):
     schedule_id: int
     request_id: int
     mode: Literal["normal", "v1g", "v2g"]
+    variant: Literal["balanced", "lowest_cost", "greenest"]
     predicted_energy_kwh: float
     predicted_duration_hours: float
     cost_eur: float
+    net_cost_eur: float
     saving_eur: float
     v2g_energy_kwh: float
     v2g_reward_eur: float
@@ -176,6 +271,7 @@ class PaymentCheckout(BaseModel):
     payment_method: Literal["test_card", "saved_card"] = "test_card"
     card_last4: str | None = Field(default=None, pattern=r"^\d{4}$")
     payment_method_id: int | None = Field(default=None, gt=0)
+    redeem_points: bool = False
 
     @model_validator(mode="after")
     def validate_payment_source(self) -> "PaymentCheckout":
@@ -189,12 +285,18 @@ class PaymentCheckout(BaseModel):
 class PaymentRead(BaseModel):
     id: int
     schedule_id: int
+    original_amount: float
     amount: float
+    points_redeemed: int
+    points_discount_eur: float
     currency: str
     payment_method: str
     card_last4: str
     status: Literal["paid", "refunded"]
     reference: str
+    provider: str = "local_demo"
+    invoice_url: str | None = None
+    invoice_pdf: str | None = None
     created_at: datetime | None
 
     model_config = ConfigDict(from_attributes=True)
@@ -241,10 +343,69 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
+class EmailRequest(BaseModel):
+    email: EmailStr
+
+
+class AccountTokenRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=300)
+
+
+class PasswordResetConfirm(AccountTokenRequest):
+    new_password: str = Field(min_length=8, max_length=128)
+    confirm_password: str = Field(min_length=8, max_length=128)
+
+    @model_validator(mode="after")
+    def passwords_match(self) -> "PasswordResetConfirm":
+        if self.new_password != self.confirm_password:
+            raise ValueError("New password and confirmation do not match")
+        return self
+
+
+class AuthActionResponse(BaseModel):
+    message: str
+    development_token: str | None = None
+
+
+class RegistrationResponse(AuthActionResponse):
+    email: EmailStr
+
+
+class StripeCheckoutCreate(BaseModel):
+    schedule_id: int = Field(gt=0)
+    redeem_points: bool = False
+
+
+class StripeCheckoutRead(BaseModel):
+    configured: bool
+    checkout_url: str | None = None
+    session_id: str | None = None
+
+
+class InvoiceRead(BaseModel):
+    payment_id: int
+    reference: str
+    issued_at: datetime | None
+    customer_name: str | None
+    customer_email: EmailStr | None
+    station_name: str | None
+    vehicle_model: str | None
+    start_time: datetime | None
+    end_time: datetime | None
+    original_amount: float
+    points_discount_eur: float
+    amount_paid: float
+    currency: str
+    provider: str
+    invoice_url: str | None
+    invoice_pdf: str | None
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"
     user: UserRead
+    verification_token: str | None = None
 
 
 class UserUpdate(BaseModel):
@@ -266,6 +427,9 @@ class UserUpdate(BaseModel):
 
 class RewardRead(BaseModel):
     id: int
+    reward_type: Literal["v1g_saving", "v2g_export"]
+    saving_eur: float
+    points: int
     energy_returned: float | None
     reward: float | None
     transaction_time: datetime | None

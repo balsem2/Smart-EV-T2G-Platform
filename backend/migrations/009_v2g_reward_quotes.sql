@@ -1,0 +1,7 @@
+ALTER TABLE charging_schedule
+ADD COLUMN IF NOT EXISTS v2g_energy_kwh DOUBLE PRECISION NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS v2g_reward_eur DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_v2g_transactions_schedule
+ON v2g_transactions (schedule_id)
+WHERE schedule_id IS NOT NULL;

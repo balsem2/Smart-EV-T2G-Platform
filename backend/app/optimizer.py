@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from math import ceil
 from typing import Literal
 
 from app.models import ChargingRequest, EnergyData, Station, Vehicle
@@ -7,6 +8,7 @@ from app.models import ChargingRequest, EnergyData, Station, Vehicle
 
 SLOT_DURATION_HOURS = 0.25
 OptimizationMode = Literal["normal", "v1g", "v2g"]
+OptimizationVariant = Literal["balanced", "lowest_cost", "greenest"]
 
 
 def _normalize(value: float, minimum: float, maximum: float) -> float:
@@ -51,6 +53,7 @@ def optimize_charging(
     station: Station,
     energy_rows: list[EnergyData],
     mode: OptimizationMode,
+    variant: OptimizationVariant = "balanced",
     forecast_rows: list[dict] | None = None,
     forecast_model_name: str | None = None,
 ) -> dict:
@@ -65,9 +68,9 @@ def optimize_charging(
     if charging_request.departure_time is None:
         raise ValueError("The departure time is missing.")
 
-    arrival_time = _round_up_to_quarter_hour(
-        charging_request.created_at or datetime.now(timezone.utc).replace(tzinfo=None)
-    )
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    requested_start = charging_request.earliest_start_time or charging_request.created_at or now
+    arrival_time = _round_up_to_quarter_hour(max(requested_start, now))
     if charging_request.departure_time <= arrival_time:
         raise ValueError("The departure time must be after the charging request.")
 
@@ -133,6 +136,38 @@ def optimize_charging(
             raise ValueError("Not enough time to reach the target SoC before departure.")
         return allocations
 
+    def allocate_contiguous(
+        slots: list[dict],
+        required_energy: float,
+        strategy: OptimizationVariant,
+        leave_export_slot: bool = False,
+    ) -> list[dict]:
+        """Choose one uninterrupted charging window for a user-friendly plan."""
+        required_slot_count = ceil(required_energy / slot_capacity)
+        windows = []
+        for index in range(len(slots) - required_slot_count + 1):
+            window = slots[index : index + required_slot_count]
+            if any(
+                window[position + 1]["timestamp"] - window[position]["timestamp"]
+                != timedelta(minutes=15)
+                for position in range(len(window) - 1)
+            ):
+                continue
+            window_end = window[-1]["timestamp"] + timedelta(minutes=15)
+            if leave_export_slot and not any(slot["timestamp"] >= window_end for slot in slots):
+                continue
+            if strategy == "lowest_cost":
+                ranking = sum(slot["price"] for slot in window) / len(window)
+            elif strategy == "greenest":
+                ranking = -sum(slot["renewable"] for slot in window) / len(window)
+            else:
+                ranking = sum(slot["score"] for slot in window) / len(window)
+            windows.append((ranking, window[0]["timestamp"], window))
+        if not windows:
+            raise ValueError("No continuous charging window is available before departure.")
+        selected_window = min(windows, key=lambda item: (item[0], item[1]))[2]
+        return allocate(selected_window, required_energy)
+
     normal_slots = allocate(candidate_slots, energy_needed)
     normal_cost = sum(
         slot["energy_kwh"] * slot["price_eur_per_mwh"] / 1000
@@ -144,17 +179,24 @@ def optimize_charging(
     if mode == "normal":
         selected_slots = normal_slots
     else:
-        ranked_slots = sorted(candidate_slots, key=lambda slot: slot["score"])
         required_charge = energy_needed
         if mode == "v2g":
             v2g_energy = min(vehicle.battery_capacity * 0.05, slot_capacity)
             required_charge += v2g_energy
-        selected_slots = allocate(ranked_slots, required_charge)
+        selected_slots = allocate_contiguous(
+            candidate_slots,
+            required_charge,
+            variant,
+            leave_export_slot=mode == "v2g",
+        )
 
     if mode == "v2g":
         used_timestamps = {slot["timestamp"] for slot in selected_slots}
+        charge_end = max(slot["timestamp"] for slot in selected_slots) + timedelta(minutes=15)
         discharge_candidates = [
-            slot for slot in candidate_slots if slot["timestamp"] not in used_timestamps
+            slot
+            for slot in candidate_slots
+            if slot["timestamp"] not in used_timestamps and slot["timestamp"] >= charge_end
         ]
         if not discharge_candidates:
             raise ValueError("No free time slot is available for V2G discharge.")
@@ -180,9 +222,11 @@ def optimize_charging(
 
     return {
         "mode": mode,
+        "variant": "balanced" if mode == "normal" else variant,
         "energy_needed": round(energy_needed, 4),
         "predicted_duration": round(energy_needed / station.power_kw, 4),
-        "cost": round(net_cost, 4),
+        "cost": round(charging_cost, 4),
+        "net_cost": round(net_cost, 4),
         "saving": round(normal_cost - net_cost, 4),
         "v2g_energy": round(v2g_energy, 4),
         "v2g_reward": round(v2g_reward, 4),

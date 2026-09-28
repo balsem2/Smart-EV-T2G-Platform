@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 import { api } from "./api";
 
@@ -11,14 +13,39 @@ const nextMorning = () => {
     .slice(0, 16);
 };
 
+const nextQuarter = () => {
+  const date = new Date(Math.ceil(Date.now() / (15 * 60 * 1000)) * 15 * 60 * 1000);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+};
+
 const navigation = [
-  ["overview", "⌂", "Overview"],
-  ["plan", "⚡", "Plan charging"],
-  ["ai", "🧠", "AI Grid Intelligence"],
-  ["vehicles", "◇", "My vehicles"],
-  ["rewards", "◎", "Rewards"],
-  ["settings", "⚙", "Settings"],
+  ["overview", "Overview"],
+  ["plan", "Plan charging"],
+  ["v2g", "V2G offers"],
+  ["ai", "Smart assistant"],
+  ["vehicles", "My vehicles"],
+  ["rewards", "Rewards"],
+  ["operator", "Operator dashboard"],
+  ["settings", "Settings"],
 ];
+
+function BrandMark() {
+  return <span className="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path className="brand-car" d="M4 14.5v-2.2c0-.9.6-1.7 1.5-1.9l1.2-.3 1.5-3h7.6l1.6 3 1.1.3c.9.2 1.5 1 1.5 1.9v2.2" /><path className="brand-car" d="M5 14.5h14M7.5 10h9" /><circle className="brand-wheel" cx="7" cy="15.5" r="1.5" /><circle className="brand-wheel" cx="17" cy="15.5" r="1.5" /><path className="brand-bolt" d="m12.8 7.8-2.5 4h2.1l-1.2 3.4 3-4.5h-2.1l.7-2.9Z" /></svg></span>;
+}
+
+function SidebarIcon({ name }) {
+  const paths = {
+    overview: <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /></>,
+    plan: <path d="m13 2-8 12h7l-1 8 8-12h-7l1-8Z" />,
+    v2g: <><path d="M7 7h10v10H7z" /><path d="m10 13 4-4M11 9h3v3M4 12H2m20 0h-2M12 4V2m0 20v-2" /></>,
+    ai: <><path d="M9.5 4.5A3.5 3.5 0 0 0 6 8v.4A3.5 3.5 0 0 0 5.5 15 3.5 3.5 0 0 0 9 19.5" /><path d="M14.5 4.5A3.5 3.5 0 0 1 18 8v.4a3.5 3.5 0 0 1 .5 6.6 3.5 3.5 0 0 1-3.5 4.5" /><path d="M9.5 4.5V20M14.5 4.5V20M9.5 9H7M14.5 9H17M9.5 15H7.5M14.5 15H17" /></>,
+    vehicles: <><path d="M5 16h14l-1.3-5.2A2.4 2.4 0 0 0 15.4 9H8.6a2.4 2.4 0 0 0-2.3 1.8L5 16Z" /><path d="M3 16v3h2m16-3v3h-2M7 19h10M8 13h.01M16 13h.01" /></>,
+    rewards: <><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><path d="m10.5 12 1 1 2.5-2.5" /></>,
+    operator: <><path d="M3 20h18M5 20V8l7-4 7 4v12M9 20v-6h6v6" /><path d="M8 10h.01M12 10h.01M16 10h.01" /></>,
+    settings: <><circle cx="12" cy="12" r="3" /><path d="M12 2.8v2M12 19.2v2M2.8 12h2M19.2 12h2M5.5 5.5l1.4 1.4M17.1 17.1l1.4 1.4M18.5 5.5l-1.4 1.4M6.9 17.1l-1.4 1.4" /></>,
+  };
+  return <svg className="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
+}
 
 const modeCopy = {
   normal: ["Normal", "Charge immediately"],
@@ -27,21 +54,45 @@ const modeCopy = {
 };
 
 function AuthScreen({ onAuthenticated }) {
-  const [mode, setMode] = useState("login");
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const params = new URLSearchParams(window.location.search);
+  const [mode, setMode] = useState(params.get("reset_token") ? "reset" : "login");
+  const [tokenValue, setTokenValue] = useState(params.get("reset_token") || "");
+  const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    const verificationToken = params.get("verify_token");
+    if (!verificationToken) return;
+    api.post("/auth/verify-email", { token: verificationToken })
+      .then((result) => { setMessage(result.message); window.history.replaceState({}, "", window.location.pathname); })
+      .catch((requestError) => setError(requestError.message));
+  }, []);
 
   const submit = async (event) => {
     event.preventDefault();
     setLoading(true);
     setError("");
     try {
-      const payload = mode === "register"
-        ? form
-        : { email: form.email, password: form.password };
-      const response = await api.post(`/auth/${mode}`, payload);
-      onAuthenticated(response);
+      if (mode === "forgot") {
+        const response = await api.post("/auth/forgot-password", { email: form.email });
+        setMessage(response.message);
+        if (response.development_token) { setTokenValue(response.development_token); setMode("reset"); }
+      } else if (mode === "reset") {
+        const response = await api.post("/auth/reset-password", { token: tokenValue, new_password: form.password, confirm_password: form.confirmPassword });
+        setMessage(response.message); setMode("login");
+        setForm({ ...form, password: "", confirmPassword: "" });
+        window.history.replaceState({}, "", window.location.pathname);
+      } else {
+        const payload = mode === "register" ? { name: form.name, email: form.email, password: form.password } : { email: form.email, password: form.password };
+        const response = await api.post(`/auth/${mode}`, payload);
+        if (mode === "register") {
+          setTokenValue(response.development_token || "");
+          setMessage(response.development_token ? "Account created. Verify locally, then sign in." : response.message);
+          setMode("verify");
+        } else onAuthenticated(response);
+      }
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -52,7 +103,7 @@ function AuthScreen({ onAuthenticated }) {
   return (
     <main className="auth-page">
       <section className="auth-story">
-        <a className="brand brand--light" href="#top"><span className="brand-mark">⚡</span><span>Smart EV</span></a>
+        <a className="brand brand--light" href="#top"><BrandMark /><span>Smart EV</span></a>
         <div>
           <p className="kicker">SMART CHARGING. REAL VALUE.</p>
           <h1>Your EV can do more than <em>charge.</em></h1>
@@ -68,25 +119,30 @@ function AuthScreen({ onAuthenticated }) {
       <section className="auth-panel">
         <div className="auth-card">
           <p className="eyebrow">WELCOME TO SMART EV</p>
-          <h2>{mode === "login" ? "Sign in to your account" : "Create your account"}</h2>
+          <h2>{mode === "login" ? "Sign in to your account" : mode === "register" ? "Create your account" : mode === "forgot" ? "Reset your password" : mode === "verify" ? "Verify your email" : "Choose a new password"}</h2>
           <p className="muted">Your vehicles, plans and rewards stay connected to you.</p>
 
-          <div className="auth-tabs">
+          {!['forgot', 'reset', 'verify'].includes(mode) && <div className="auth-tabs">
             <button className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>Login</button>
             <button className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>Register</button>
-          </div>
+          </div>}
 
-          <form onSubmit={submit}>
+          {mode === "verify" ? <div className="auth-verify-panel"><p className="success-message">{message}</p>{tokenValue ? <button className="primary-button" onClick={async () => { setLoading(true); setError(""); try { await api.post("/auth/verify-email", { token: tokenValue }); onAuthenticated(await api.post("/auth/login", { email: form.email, password: form.password })); } catch (requestError) { setError(requestError.message); } finally { setLoading(false); } }}>Verify locally and continue<span>→</span></button> : <p className="muted">Open the link sent to {form.email}, then return to login.</p>}{error && <p className="error-message">{error}</p>}<button type="button" className="text-button auth-help" onClick={() => setMode("login")}>Back to login</button></div> : <form onSubmit={submit}>
             {mode === "register" && (
               <Field label="Full name" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required />
             )}
-            <Field label="Email address" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} required />
-            <Field label="Password" type="password" value={form.password} onChange={(value) => setForm({ ...form, password: value })} minLength="8" required />
+            {mode !== "reset" && <Field label="Email address" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} required />}
+            {mode !== "forgot" && <Field label={mode === "reset" ? "New password" : "Password"} type="password" value={form.password} onChange={(value) => setForm({ ...form, password: value })} minLength="8" required />}
+            {mode === "reset" && <Field label="Confirm new password" type="password" value={form.confirmPassword} onChange={(value) => setForm({ ...form, confirmPassword: value })} minLength="8" required />}
             {error && <p className="error-message">{error}</p>}
+            {message && <p className="success-message">{message}</p>}
             <button className="primary-button" disabled={loading}>
-              {loading ? "Please wait…" : mode === "login" ? "Login" : "Create account"}<span>→</span>
+              {loading ? "Please wait…" : mode === "login" ? "Login" : mode === "register" ? "Create account" : mode === "forgot" ? "Send reset link" : "Reset password"}<span>→</span>
             </button>
+            {mode === "login" && <button type="button" className="text-button auth-help" onClick={() => { setMode("forgot"); setError(""); setMessage(""); }}>Forgot password?</button>}
+            {['forgot', 'reset'].includes(mode) && <button type="button" className="text-button auth-help" onClick={() => { setMode("login"); setError(""); }}>Back to login</button>}
           </form>
+          }
         </div>
       </section>
     </main>
@@ -111,6 +167,7 @@ function VehicleForm({ catalog, onSubmit, busy, buttonLabel }) {
         </select>
       </Field>
       <Field label="Battery capacity"><input value={selected ? `${selected.battery_capacity} kWh` : "Select a model"} disabled /></Field>
+      <Field label="Compatible connectors"><input value={selected?.connector_types || "Select a model"} disabled /></Field>
       <Field label="Vehicle age (years)" type="number" value={form.vehicle_age} onChange={(value) => setForm({ ...form, vehicle_age: value })} min="0" max="100" required />
       <button className="primary-button" disabled={busy || !form.catalog_id}>{busy ? "Saving…" : buttonLabel}<span>→</span></button>
     </form>
@@ -129,7 +186,7 @@ function Onboarding({ user, token, catalog, onCompleted, logout }) {
   };
   return (
     <main className="onboarding-page">
-      <header className="onboarding-header"><span className="brand"><span className="brand-mark">⚡</span><span>Smart EV</span></span><button className="logout-button" onClick={logout}>Log out</button></header>
+      <header className="onboarding-header"><span className="brand"><BrandMark /><span>Smart EV</span></span><button className="logout-button" onClick={logout}>Log out</button></header>
       <section className="onboarding-layout">
         <div className="onboarding-copy"><p className="kicker">WELCOME, {user.name?.toUpperCase()}</p><h1>First, connect your EV.</h1><p>Your model determines battery capacity and makes every charging plan accurate. Models are limited to the project dataset.</p><div className="onboarding-step"><b>1</b><span>Account created</span><b className="active">2</b><span>Add your vehicle</span></div></div>
         <article className="content-card onboarding-card"><div className="card-heading"><div><p className="eyebrow">REQUIRED SETUP</p><h3>Tell us about your car</h3></div><span className="step-pill">02</span></div>{error && <p className="error-message">{error}</p>}<VehicleForm catalog={catalog} onSubmit={submit} busy={busy} buttonLabel="Finish setup" /></article>
@@ -148,15 +205,16 @@ function Field({ label, value, onChange, type = "text", children, ...props }) {
 }
 
 function Sidebar({ active, setActive, user, logout }) {
+  const visibleNavigation = navigation.filter(([key]) => key !== "operator" || ["operator", "admin"].includes(user.role));
   return (
     <aside className="sidebar">
       <button className="brand brand-button" onClick={() => setActive("overview")}>
-        <span className="brand-mark">⚡</span><span>Smart EV</span>
+        <BrandMark /><span>Smart EV</span>
       </button>
       <nav>
-        {navigation.map(([key, icon, label]) => (
+        {visibleNavigation.map(([key, label]) => (
           <button key={key} className={active === key ? "active" : ""} onClick={() => setActive(key)}>
-            <i>{icon}</i><span>{label}</span>
+            <i><SidebarIcon name={key} /></i><span>{label}</span>
           </button>
         ))}
       </nav>
@@ -176,23 +234,178 @@ function Sidebar({ active, setActive, user, logout }) {
 
 function ModeCard({ result, recommended, selected, onSelect }) {
   const [name, subtitle] = modeCopy[result.mode];
+  const displayedCost = result.mode === "v2g" ? result.net_cost_eur : result.cost_eur;
+  const totalChargedEnergy = result.slots
+    .filter((slot) => slot.action === "charge")
+    .reduce((total, slot) => total + slot.energy_kwh, 0);
+  const chargeMinutes = result.slots.filter((slot) => slot.action === "charge").length * 15;
+  const exportMinutes = result.slots.filter((slot) => slot.action === "discharge").length * 15;
+  const chooseLabel = result.mode === "v2g" ? "Accept V2G offer" : result.mode === "v1g" ? "Choose smart charging" : "Choose normal charging";
   return (
     <article className={`mode-card ${recommended ? "best" : ""} ${selected ? "selected" : ""}`} onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") onSelect(); }} role="button" tabIndex="0">
       <div className="mode-card__top">
         <div><p className="eyebrow">{subtitle}</p><h3>{name}</h3></div>
         {recommended && <span className="best-pill">Recommended</span>}
       </div>
-      <strong className="price">€{result.cost_eur.toFixed(2)}</strong>
-      <Metric label="Saving" value={`€${result.saving_eur.toFixed(2)}`} />
-      <Metric label="V2G reward" value={`€${result.v2g_reward_eur.toFixed(2)}`} />
-      <Metric label="Active slots" value={result.slots.length} />
-      <span className="choose-plan">{selected ? "✓ Selected" : "Choose this plan"}</span>
+      {result.mode === "v2g" && <div className="v2g-offer-note"><b>Grid offer</b><span>Your car sends {result.v2g_energy_kwh.toFixed(2)} kWh to the grid and you earn €{result.v2g_reward_eur.toFixed(2)}</span></div>}
+      <small className="price-caption">{result.mode === "v2g" ? "Effective cost after reward" : "Final amount to pay"}</small>
+      <strong className="price">€{displayedCost.toFixed(2)}</strong>
+      {result.mode === "v2g" ? <><Metric label="Grid → car (total charged)" value={`${totalChargedEnergy.toFixed(2)} kWh`} /><Metric label="Car → grid (you give)" value={`${result.v2g_energy_kwh.toFixed(2)} kWh`} /><Metric label="Battery keeps (net)" value={`${result.predicted_energy_kwh.toFixed(2)} kWh`} /></> : <Metric label="Energy added to battery" value={`${result.predicted_energy_kwh.toFixed(2)} kWh`} />}
+      {result.mode !== "normal" && <Metric label="You save" value={`€${result.saving_eur.toFixed(2)}`} />}
+      {result.mode === "v2g" && <Metric label="Reward credited" value={`€${result.v2g_reward_eur.toFixed(2)}`} />}
+      {result.mode === "v2g" && <Metric label="Charging cost to pay" value={`€${result.cost_eur.toFixed(2)}`} />}
+      <Metric label="Charge duration" value={formatDuration(chargeMinutes)} />
+      <Metric label="Charge time" value={formatChargingSummary(result.slots)} />
+      {result.mode === "v2g" && <Metric label="Grid export duration" value={formatDuration(exportMinutes)} />}
+      {result.mode === "v2g" && <Metric label="Grid export time" value={formatChargingSummary(result.slots, "discharge")} />}
+      <span className="choose-plan">{selected ? "✓ Selected" : chooseLabel}</span>
     </article>
   );
 }
 
 function Metric({ label, value }) {
   return <div className="metric-row"><span>{label}</span><b>{value}</b></div>;
+}
+
+function formatDuration(totalMinutes) {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (!hours) return `${minutes} min`;
+  return `${hours}h${minutes ? ` ${minutes} min` : ""}`;
+}
+
+const viennaDay = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Vienna", day: "2-digit", month: "short" });
+const viennaTime = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Vienna", hour: "2-digit", minute: "2-digit", hour12: false });
+
+function formatChargingSummary(slots, action = "charge") {
+  const chargingSlots = slots
+    .filter((slot) => slot.action === action)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  if (!chargingSlots.length) return "—";
+
+  const windows = [];
+  chargingSlots.forEach((slot) => {
+    const start = new Date(slot.timestamp).getTime();
+    const previous = windows[windows.length - 1];
+    if (previous && previous.end === start) previous.end = start + 15 * 60 * 1000;
+    else windows.push({ start, end: start + 15 * 60 * 1000 });
+  });
+
+  return windows.map((window, index) => {
+    const date = viennaDay.format(new Date(window.start));
+    const previousDate = index > 0 ? viennaDay.format(new Date(windows[index - 1].start)) : null;
+    const time = `${viennaTime.format(new Date(window.start))}–${viennaTime.format(new Date(window.end))}`;
+    return index === 0 || date !== previousDate ? `${date} · ${time}` : time;
+  }).join(" + ");
+}
+
+function ScheduleWindows({ slots, smart }) {
+  const windows = [];
+  [...slots].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)).forEach((slot) => {
+    const start = new Date(slot.timestamp).getTime();
+    const end = start + 15 * 60 * 1000;
+    const previous = windows[windows.length - 1];
+    if (previous && previous.action === slot.action && previous.end === start) previous.end = end;
+    else windows.push({ action: slot.action, start, end });
+  });
+
+  const formatWindow = (window) => {
+    const start = new Date(window.start);
+    const end = new Date(window.end);
+    const startDay = viennaDay.format(start);
+    const endDay = viennaDay.format(end);
+    return startDay === endDay
+      ? `${startDay} · ${viennaTime.format(start)}–${viennaTime.format(end)}`
+      : `${startDay} ${viennaTime.format(start)}–${endDay} ${viennaTime.format(end)}`;
+  };
+
+  return <div className="schedule-windows"><p>{smart ? "Recommended schedule" : "Charging schedule"}<small>Austria time</small></p>{windows.map((window, index) => <div key={`${window.action}-${window.start}-${index}`}><span className={window.action}>{window.action === "charge" ? "Charge" : "Grid export"}</span><b>{formatWindow(window)}</b></div>)}</div>;
+}
+
+function StationMap({ stations, selectedStationId, vehicle, onSelect }) {
+  const elementRef = useRef(null);
+  const mapRef = useRef(null);
+  const layerRef = useRef(null);
+  const [tilesUnavailable, setTilesUnavailable] = useState(false);
+
+  useEffect(() => {
+    if (!elementRef.current || mapRef.current) return undefined;
+    const map = L.map(elementRef.current, { scrollWheelZoom: false }).setView([47.6, 14.2], 7);
+    const tiles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    }).addTo(map);
+    tiles.on("tileerror", () => setTilesUnavailable(true));
+    tiles.on("load", () => setTilesUnavailable(false));
+    mapRef.current = map;
+    layerRef.current = L.layerGroup().addTo(map);
+    return () => { map.remove(); mapRef.current = null; };
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = layerRef.current;
+    if (!map || !layer) return;
+    layer.clearLayers();
+    const coordinates = [];
+    stations.forEach((station) => {
+      if (station.latitude == null || station.longitude == null) return;
+      const compatible = connectorsAreCompatible(vehicle, station);
+      const available = compatible && station.operational_status === "online" && station.available_chargers > 0;
+      const selected = station.id === Number(selectedStationId);
+      const marker = L.marker([station.latitude, station.longitude], {
+        icon: L.divIcon({
+          className: "station-map-icon-wrap",
+          html: `<span class="station-map-icon ${available ? "available" : "disabled"} ${selected ? "selected" : ""} ${station.supports_v2g ? "v2g" : ""}">${station.supports_v2g ? "↔" : "⚡"}</span>`,
+          iconSize: [34, 34], iconAnchor: [17, 17],
+        }),
+      }).addTo(layer);
+      marker.bindTooltip(`<b>${station.station_name || "Station"}</b><br>${station.city || ""} · ${compatible ? `${station.available_chargers}/${station.total_chargers} free` : "Incompatible connector"}${station.supports_v2g ? " · V2G" : ""}`);
+      if (available) marker.on("click", () => onSelect(station.id));
+      coordinates.push([station.latitude, station.longitude]);
+    });
+    if (coordinates.length && !map._smartEvFitted) {
+      map.fitBounds(coordinates, { padding: [30, 30], maxZoom: 8 });
+      map._smartEvFitted = true;
+    }
+  }, [stations, selectedStationId, vehicle, onSelect]);
+
+  return <article className="content-card station-map-card"><div className="card-heading"><div><p className="eyebrow">STATION MAP</p><h3>Choose a compatible station</h3></div><span className="map-legend"><i /> Available <i className="v2g" /> V2G</span></div><div className="station-map-wrap"><div className="station-map" ref={elementRef} />{tilesUnavailable && <div className="map-offline-note"><b>Map background unavailable</b><span>Station markers and the selector below still work.</span></div>}</div><p className="planning-window-note">Grey stations cannot be selected because they are unavailable or their connector is incompatible with your vehicle.</p></article>;
+}
+
+function NotificationCenter({ token, notifications, setNotifications }) {
+  const [open, setOpen] = useState(false);
+  const unread = notifications.filter((item) => !item.read_at).length;
+  const readOne = async (item) => {
+    if (!item.read_at) {
+      const updated = await api.patch(`/notifications/${item.id}/read`, {}, token);
+      setNotifications((current) => current.map((entry) => entry.id === item.id ? updated : entry));
+    }
+  };
+  const readAll = async () => {
+    await api.post("/notifications/read-all", {}, token);
+    const now = new Date().toISOString();
+    setNotifications((current) => current.map((item) => ({ ...item, read_at: item.read_at || now })));
+  };
+  return <div className="notification-center"><button className="notification-bell" onClick={() => setOpen(!open)} aria-label="Notifications">♢{unread > 0 && <b>{unread}</b>}</button>{open && <div className="notification-popover"><div className="notification-heading"><strong>Notifications</strong>{unread > 0 && <button onClick={readAll}>Mark all read</button>}</div>{notifications.length ? notifications.slice(0, 8).map((item) => <button key={item.id} className={`notification-item ${item.read_at ? "" : "unread"}`} onClick={() => readOne(item)}><span>{item.title}</span><small>{item.message}</small></button>) : <p className="empty-copy">No notifications yet.</p>}</div>}</div>;
+}
+
+function VerificationBanner({ user, verificationToken, setVerificationToken, refreshProfile }) {
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  if (user.email_verified) return null;
+  const verify = async () => {
+    if (!verificationToken) return;
+    setBusy(true);
+    try { const result = await api.post("/auth/verify-email", { token: verificationToken }); setMessage(result.message); await refreshProfile(); }
+    catch (error) { setMessage(error.message); } finally { setBusy(false); }
+  };
+  const resend = async () => {
+    setBusy(true);
+    try { const result = await api.post("/auth/resend-verification", { email: user.email }); setVerificationToken(result.development_token || ""); setMessage(result.development_token ? "Development verification link generated. Click Verify now." : result.message); }
+    catch (error) { setMessage(error.message); } finally { setBusy(false); }
+  };
+  return <div className="verification-banner"><div><b>Verify your email address</b><span>{message || `A verification link was issued for ${user.email}.`}</span></div><div>{verificationToken && <button onClick={verify} disabled={busy}>Verify now</button>}<button onClick={resend} disabled={busy}>Resend link</button></div></div>;
 }
 
 export default function App() {
@@ -204,13 +417,18 @@ export default function App() {
   const [paymentMethod, setPaymentMethod] = useState(null);
   const [requests, setRequests] = useState([]);
   const [rewards, setRewards] = useState([]);
+  const [reservations, setReservations] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [stripeMessage, setStripeMessage] = useState("");
+  const [verificationToken, setVerificationToken] = useState("");
   const [active, setActive] = useState("overview");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(Boolean(token));
   const [error, setError] = useState("");
 
   const loadData = async (activeToken) => {
-    const [profile, ownedVehicles, availableStations, vehicleCatalog, rewardHistory, requestHistory, savedPaymentMethod] = await Promise.all([
+    const [profile, ownedVehicles, availableStations, vehicleCatalog, rewardHistory, requestHistory, savedPaymentMethod, reservationHistory, notificationHistory, paymentHistory] = await Promise.all([
       api.get("/me", activeToken),
       api.get("/vehicles", activeToken),
       api.get("/stations", activeToken),
@@ -218,6 +436,9 @@ export default function App() {
       api.get("/me/rewards", activeToken),
       api.get("/charging-requests", activeToken),
       api.get("/me/payment-method", activeToken),
+      api.get("/reservations", activeToken),
+      api.get("/notifications", activeToken),
+      api.get("/payments", activeToken),
     ]);
     setUser(profile);
     setVehicles(ownedVehicles);
@@ -226,6 +447,9 @@ export default function App() {
     setRewards(rewardHistory);
     setRequests(requestHistory);
     setPaymentMethod(savedPaymentMethod);
+    setReservations(reservationHistory);
+    setNotifications(notificationHistory);
+    setPayments(paymentHistory);
   };
 
   useEffect(() => {
@@ -235,10 +459,30 @@ export default function App() {
   }, [token]);
 
   useEffect(() => {
+    if (!token) return;
+    const query = new URLSearchParams(window.location.search);
+    const sessionId = query.get("stripe_session_id");
+    const emailToken = query.get("verify_token");
+    if (sessionId) {
+      api.post(`/payments/stripe/confirm/${encodeURIComponent(sessionId)}`, {}, token)
+        .then((receipt) => { setStripeMessage(`Stripe test payment ${receipt.reference} confirmed. Your invoice is ready.`); setActive("rewards"); return loadData(token); })
+        .catch((requestError) => setError(requestError.message))
+        .finally(() => window.history.replaceState({}, "", window.location.pathname));
+    } else if (emailToken) {
+      api.post("/auth/verify-email", { token: emailToken })
+        .then((result) => { setStripeMessage(result.message); return loadData(token); })
+        .catch((requestError) => setError(requestError.message))
+        .finally(() => window.history.replaceState({}, "", window.location.pathname));
+    }
+  }, [token]);
+
+  useEffect(() => {
     if (!token) return undefined;
     const interval = window.setInterval(() => {
-      api.get("/stations", token).then(setStations).catch(() => {});
-    }, 30000);
+      Promise.all([api.get("/stations", token), api.get("/notifications", token)])
+        .then(([stationData, notificationData]) => { setStations(stationData); setNotifications(notificationData); })
+        .catch(() => {});
+    }, 5000);
     return () => window.clearInterval(interval);
   }, [token]);
 
@@ -257,6 +501,7 @@ export default function App() {
   const authenticated = (response) => {
     localStorage.setItem("smartEvToken", response.access_token);
     setUser(response.user);
+    setVerificationToken(response.verification_token || "");
     setToken(response.access_token);
   };
 
@@ -269,21 +514,27 @@ export default function App() {
   };
 
   if (!token) return <AuthScreen onAuthenticated={authenticated} />;
-  if (loading || !user) return <div className="app-loader"><span>⚡</span><p>Loading Smart EV…</p></div>;
+  if (loading || !user) return <div className="app-loader"><BrandMark /><p>Loading Smart EV…</p></div>;
 
   if (!user.onboarding_completed) {
     return <Onboarding user={user} token={token} catalog={catalog} onCompleted={() => loadData(token)} logout={logout} />;
   }
 
   const refreshProfile = async () => {
-    const [profile, rewardHistory, requestHistory] = await Promise.all([
+    const [profile, rewardHistory, requestHistory, reservationHistory, notificationHistory, paymentHistory] = await Promise.all([
       api.get("/me", token),
       api.get("/me/rewards", token),
       api.get("/charging-requests", token),
+      api.get("/reservations", token),
+      api.get("/notifications", token),
+      api.get("/payments", token),
     ]);
     setUser(profile);
     setRewards(rewardHistory);
     setRequests(requestHistory);
+    setReservations(reservationHistory);
+    setNotifications(notificationHistory);
+    setPayments(paymentHistory);
   };
 
   return (
@@ -291,23 +542,28 @@ export default function App() {
       <Sidebar active={active} setActive={setActive} user={user} logout={logout} />
       <main className="app-main">
         <header className="app-header">
-          <div><p className="kicker">SMART EV CONTROL CENTER</p><h1>{navigation.find(([key]) => key === active)?.[2]}</h1></div>
-          <div className="live-status"><i /> Grid connected</div>
+          <div><p className="kicker">SMART EV CONTROL CENTER</p><h1>{navigation.find(([key]) => key === active)?.[1]}</h1></div>
+          <div className="header-actions"><div className="live-status"><i /> Grid connected</div><NotificationCenter token={token} notifications={notifications} setNotifications={setNotifications} /></div>
         </header>
 
+        <VerificationBanner user={user} verificationToken={verificationToken} setVerificationToken={setVerificationToken} refreshProfile={refreshProfile} />
+
         {error && <p className="error-message global-error">{error}</p>}
-        {active === "overview" && <Overview user={user} vehicles={vehicles} requests={requests} rewards={rewards} setActive={setActive} />}
-        {active === "plan" && <PlanView token={token} vehicles={vehicles} stations={stations} paymentMethod={paymentMethod} results={results} setResults={setResults} setError={setError} refreshProfile={refreshProfile} />}
-        {active === "ai" && <AIView token={token} />}
-        {active === "vehicles" && <VehiclesView token={token} catalog={catalog} vehicles={vehicles} setVehicles={setVehicles} setError={setError} />}
-        {active === "rewards" && <RewardsView user={user} rewards={rewards} />}
+        {stripeMessage && <p className="success-message global-success">{stripeMessage}</p>}
+        {active === "overview" && <Overview user={user} vehicles={vehicles} stations={stations} requests={requests} rewards={rewards} reservations={reservations} setActive={setActive} />}
+        {active === "plan" && <PlanView token={token} vehicles={vehicles} stations={stations} paymentMethod={paymentMethod} rewardPoints={user.reward_points} results={results} setResults={setResults} setError={setError} refreshProfile={refreshProfile} />}
+        {active === "v2g" && <V2GOffersView token={token} vehicles={vehicles} stations={stations} setError={setError} refreshProfile={refreshProfile} />}
+        {active === "ai" && <AIView token={token} stations={stations} />}
+        {active === "vehicles" && <VehiclesView token={token} catalog={catalog} vehicles={vehicles} setVehicles={setVehicles} setResults={setResults} setError={setError} />}
+        {active === "rewards" && <RewardsView token={token} user={user} rewards={rewards} payments={payments} />}
+        {active === "operator" && ["operator", "admin"].includes(user.role) && <OperatorDashboard token={token} stations={stations} setError={setError} />}
         {active === "settings" && <SettingsView token={token} user={user} setUser={setUser} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} setError={setError} />}
       </main>
     </div>
   );
 }
 
-function Overview({ user, vehicles, requests, rewards, setActive }) {
+function Overview({ user, vehicles, stations, requests, rewards, reservations, setActive }) {
   return (
     <section className="view-stack">
       <article className="welcome-card">
@@ -316,10 +572,11 @@ function Overview({ user, vehicles, requests, rewards, setActive }) {
       </article>
       <div className="stat-grid">
         <StatCard label="Reward wallet" value={`€${user.wallet_balance.toFixed(2)}`} detail="Earned through V2G" accent />
-        <StatCard label="Smart points" value={user.reward_points} detail="10 points per exported kWh" />
+        <StatCard label="Smart points" value={user.reward_points} detail="V1G savings + V2G demo export" />
         <StatCard label="My vehicles" value={vehicles.length} detail="Connected to this account" />
         <StatCard label="Charging plans" value={requests.length} detail="Saved sessions" />
       </div>
+      <article className="content-card"><div className="card-heading"><div><p className="eyebrow">RESERVATIONS</p><h3>Your charging slots</h3></div><button className="text-button" onClick={() => setActive("plan")}>Reserve another →</button></div>{reservations.length ? reservations.slice(0, 4).map((reservation) => { const station = stations.find((item) => item.id === reservation.station_id); return <div className="list-row" key={reservation.id}><span className="list-icon">P</span><div><b>{station?.station_name || `Station #${reservation.station_id}`}</b><small>{station?.city ? `${station.city} · ` : ""}{new Date(reservation.start_time).toLocaleString()} → {new Date(reservation.end_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small></div><em className={`status-${reservation.status}`}>{reservation.status}</em></div>; }) : <EmptyCopy text="A confirmed reservation will appear automatically after payment." />}</article>
       <div className="split-grid">
         <article className="content-card">
           <div className="card-heading"><div><p className="eyebrow">GARAGE</p><h3>Your vehicles</h3></div><button className="text-button" onClick={() => setActive("vehicles")}>Manage →</button></div>
@@ -327,7 +584,7 @@ function Overview({ user, vehicles, requests, rewards, setActive }) {
         </article>
         <article className="content-card">
           <div className="card-heading"><div><p className="eyebrow">RECENT VALUE</p><h3>V2G rewards</h3></div><button className="text-button" onClick={() => setActive("rewards")}>View all →</button></div>
-          {rewards.length ? rewards.slice(0, 3).map((reward) => <RewardRow key={reward.id} reward={reward} />) : <EmptyCopy text="Your first V2G reward will appear here." />}
+          {rewards.length ? rewards.slice(0, 3).map((reward) => <RewardRow key={reward.id} reward={reward} />) : <EmptyCopy text="Your first Smart V1G or V2G reward will appear here." />}
         </article>
       </div>
     </section>
@@ -338,29 +595,50 @@ function StatCard({ label, value, detail, accent = false }) {
   return <article className={`stat-card ${accent ? "accent" : ""}`}><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>;
 }
 
-function VehicleRow({ vehicle }) {
-  return <div className="list-row"><span className="list-icon">EV</span><div><b>{vehicle.model}</b><small>{vehicle.battery_capacity} kWh battery</small></div><em>{vehicle.vehicle_age} yr</em></div>;
+function VehicleRow({ vehicle, onRemove, removing = false }) {
+  return <div className="list-row"><span className="list-icon">EV</span><div><b>{vehicle.model}</b><small>{vehicle.battery_capacity} kWh battery · {vehicle.connector_types || "Connector unknown"}</small></div><em>{vehicle.vehicle_age} yr</em>{onRemove && <button type="button" className="remove-vehicle-button" onClick={() => onRemove(vehicle)} disabled={removing}>{removing ? "Removing…" : "Remove"}</button>}</div>;
 }
 
 function RewardRow({ reward }) {
-  return <div className="list-row"><span className="list-icon reward">↗</span><div><b>Grid support</b><small>{reward.energy_returned?.toFixed(2)} kWh exported</small></div><em>+€{reward.reward?.toFixed(2)}</em></div>;
+  const isV1G = reward.reward_type === "v1g_saving";
+  return <div className="list-row"><span className="list-icon reward">↗</span><div><b>{isV1G ? "Smart V1G saving" : "Demo grid support"}</b><small>{isV1G ? `€${reward.saving_eur.toFixed(2)} saved` : `${reward.energy_returned?.toFixed(2)} kWh simulated export`}</small></div><em>+{reward.points} pts{!isV1G && reward.reward > 0 ? ` · +€${reward.reward.toFixed(2)}` : ""}</em></div>;
 }
 
 function EmptyCopy({ text }) { return <p className="empty-copy">{text}</p>; }
 
-function PaymentPanel({ plan, token, payment, onPaid, savedPaymentMethod }) {
+function PaymentPanel({ plan, token, payment, onPaid, savedPaymentMethod, availablePoints }) {
   const [form, setForm] = useState({ cardholder: "", cardNumber: "", expiry: "", cvc: "" });
   const [useSaved, setUseSaved] = useState(Boolean(savedPaymentMethod));
+  const [redeemPoints, setRedeemPoints] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [stripeConfigured, setStripeConfigured] = useState(false);
   const [name] = modeCopy[plan.mode];
+  const redeemablePoints = Math.min(Math.floor(availablePoints / 100), Math.floor(Math.max(plan.cost_eur, 0))) * 100;
+  const estimatedDiscount = redeemPoints ? redeemablePoints / 100 : 0;
+  const estimatedTotal = Math.max(0, plan.cost_eur - estimatedDiscount);
+  const chargeTime = formatChargingSummary(plan.slots);
+  const exportTime = plan.mode === "v2g" ? formatChargingSummary(plan.slots, "discharge") : null;
+  const totalChargedEnergy = plan.slots
+    .filter((slot) => slot.action === "charge")
+    .reduce((total, slot) => total + slot.energy_kwh, 0);
+
+  useEffect(() => { api.get("/payments/stripe/status", token).then((result) => setStripeConfigured(result.configured)).catch(() => {}); }, [token]);
+
+  const payWithStripe = async () => {
+    setBusy(true); setError("");
+    try {
+      const session = await api.post("/payments/stripe/checkout-session", { schedule_id: plan.schedule_id, redeem_points: redeemPoints }, token);
+      window.location.assign(session.checkout_url);
+    } catch (requestError) { setError(requestError.message); setBusy(false); }
+  };
 
   const pay = async (event) => {
     event.preventDefault(); setError("");
     if (useSaved && savedPaymentMethod) {
       setBusy(true);
       try {
-        const receipt = await api.post("/payments/checkout", { schedule_id: plan.schedule_id, payment_method: "saved_card", payment_method_id: savedPaymentMethod.id }, token);
+        const receipt = await api.post("/payments/checkout", { schedule_id: plan.schedule_id, payment_method: "saved_card", payment_method_id: savedPaymentMethod.id, redeem_points: redeemPoints }, token);
         onPaid(receipt);
       } catch (requestError) { setError(requestError.message); } finally { setBusy(false); }
       return;
@@ -372,18 +650,35 @@ function PaymentPanel({ plan, token, payment, onPaid, savedPaymentMethod }) {
     }
     setBusy(true);
     try {
-      const receipt = await api.post("/payments/checkout", { schedule_id: plan.schedule_id, payment_method: "test_card", card_last4: digits.slice(-4) }, token);
+      const receipt = await api.post("/payments/checkout", { schedule_id: plan.schedule_id, payment_method: "test_card", card_last4: digits.slice(-4), redeem_points: redeemPoints }, token);
       setForm({ cardholder: "", cardNumber: "", expiry: "", cvc: "" });
       onPaid(receipt);
     } catch (requestError) { setError(requestError.message); } finally { setBusy(false); }
   };
 
-  if (payment) return <article className="payment-success"><span>✓</span><div><p className="eyebrow">DEMO PAYMENT CONFIRMED</p><h3>{name} demo plan confirmed</h3><p>€{payment.amount.toFixed(2)} simulated for card ending {payment.card_last4}.</p><small>Reference: {payment.reference} · No physical charger reservation was made.</small></div></article>;
+  if (payment) return <article className="payment-success"><span>✓</span><div><p className="eyebrow">PAYMENT & RESERVATION CONFIRMED</p><h3>{name} charging slot reserved</h3><p>€{payment.amount.toFixed(2)} simulated for card ending {payment.card_last4}.</p>{payment.points_redeemed > 0 && <p className="points-used">{payment.points_redeemed} points used · €{payment.points_discount_eur.toFixed(2)} discount from €{payment.original_amount.toFixed(2)}</p>}<small>Your selected station and exact charging time are reserved. Reference: {payment.reference}</small></div></article>;
 
-  return <article className="payment-card"><div className="payment-summary"><div><p className="eyebrow">SELECTED PLAN</p><h3>{name}</h3><p>Advance payment confirms your charging plan.</p></div><strong>€{plan.cost_eur.toFixed(2)}</strong></div><form onSubmit={pay}>{savedPaymentMethod && <button type="button" className={`saved-card-choice ${useSaved ? "active" : ""}`} onClick={() => setUseSaved(true)}><span>{savedPaymentMethod.brand}</span><b>•••• {savedPaymentMethod.last4}</b><small>Expires {String(savedPaymentMethod.expiry_month).padStart(2, "0")}/{String(savedPaymentMethod.expiry_year).slice(-2)}</small></button>}{useSaved && savedPaymentMethod ? <button type="button" className="text-button another-card" onClick={() => setUseSaved(false)}>Use another card</button> : <><Field label="Cardholder name" value={form.cardholder} onChange={(value) => setForm({ ...form, cardholder: value })} autoComplete="cc-name" required /><Field label="Demo card number" value={form.cardNumber} onChange={(value) => setForm({ ...form, cardNumber: value })} inputMode="numeric" placeholder="4242 4242 4242 4242" autoComplete="cc-number" required /><div className="field-grid"><Field label="Expiry" value={form.expiry} onChange={(value) => setForm({ ...form, expiry: value })} placeholder="MM/YY" autoComplete="cc-exp" required /><Field label="CVC" type="password" value={form.cvc} onChange={(value) => setForm({ ...form, cvc: value })} inputMode="numeric" autoComplete="cc-csc" required /></div></>}{error && <p className="error-message">{error}</p>}<p className="payment-note">Demo payment only — full card details and CVC are never sent to or stored by Smart EV.</p><button className="primary-button" disabled={busy}>{busy ? "Confirming…" : `Pay €${plan.cost_eur.toFixed(2)} in advance`}<span>→</span></button></form></article>;
+  return <article className="payment-card"><div className="payment-summary"><div><p className="eyebrow">CONFIRM SELECTED PLAN</p><h3>{name}</h3><p>Your final charging time is shown below before payment.</p><div className="plan-confirmation-details"><span><b>Charge</b>{chargeTime}</span>{plan.mode === "v2g" ? <><span><b>Grid → car</b>{totalChargedEnergy.toFixed(2)} kWh</span><span><b>Car → grid</b>{plan.v2g_energy_kwh.toFixed(2)} kWh · {exportTime}</span><span><b>Battery keeps</b>{plan.predicted_energy_kwh.toFixed(2)} kWh net</span><span><b>You earn</b>€{plan.v2g_reward_eur.toFixed(2)} credited to wallet</span></> : <span><b>Battery energy</b>{plan.predicted_energy_kwh.toFixed(2)} kWh</span>}</div></div><div><small>FINAL AMOUNT TO PAY</small>{estimatedDiscount > 0 && <small className="original-price">€{plan.cost_eur.toFixed(2)}</small>}<strong>€{estimatedTotal.toFixed(2)}</strong></div></div><form onSubmit={pay}>{redeemablePoints >= 100 && <label className="points-redemption"><input type="checkbox" checked={redeemPoints} onChange={(event) => setRedeemPoints(event.target.checked)} /><span><b>Use {redeemablePoints} points</b><small>Save €{(redeemablePoints / 100).toFixed(2)} · 100 points = €1</small></span></label>}{stripeConfigured && <div className="stripe-checkout"><b>Stripe test mode</b><p>Use Stripe's secure checkout. Try card 4242 4242 4242 4242 with a future date and any CVC.</p><button type="button" className="stripe-button" onClick={payWithStripe} disabled={busy}>Pay €{estimatedTotal.toFixed(2)} with Stripe test</button><span>or use the local academic payment below</span></div>}{savedPaymentMethod && <button type="button" className={`saved-card-choice ${useSaved ? "active" : ""}`} onClick={() => setUseSaved(true)}><span>{savedPaymentMethod.brand}</span><b>•••• {savedPaymentMethod.last4}</b><small>Expires {String(savedPaymentMethod.expiry_month).padStart(2, "0")}/{String(savedPaymentMethod.expiry_year).slice(-2)}</small></button>}{useSaved && savedPaymentMethod ? <button type="button" className="text-button another-card" onClick={() => setUseSaved(false)}>Use another card</button> : <><Field label="Local demo card number" value={form.cardNumber} onChange={(value) => setForm({ ...form, cardNumber: value })} inputMode="numeric" placeholder="4242 4242 4242 4242" required /><div className="field-grid"><Field label="Expiry" value={form.expiry} onChange={(value) => setForm({ ...form, expiry: value })} placeholder="MM/YY" required /><Field label="CVC" type="password" value={form.cvc} onChange={(value) => setForm({ ...form, cvc: value })} inputMode="numeric" required /></div></>}{error && <p className="error-message">{error}</p>}<p className="payment-note">Stripe receives card data only on its hosted test page. The local fallback stores only the last four digits.</p><button className="primary-button" disabled={busy}>{busy ? "Confirming…" : `Confirm local demo payment €${estimatedTotal.toFixed(2)}`}<span>→</span></button></form></article>;
 }
 
-function PlanView({ token, vehicles, stations, paymentMethod, results, setResults, setError, refreshProfile }) {
+function PlanResults({ results, best, selectedPlan, setSelectedPlan, setPayment, token, payment, paymentMethod, rewardPoints, refreshProfile }) {
+  const plans = results.filter((result) => result.mode === "normal" || result.mode === "v1g");
+  return <section className="results-block"><div className="card-heading"><div><p className="eyebrow">2 CHARGING MODES</p><h3>Choose how you want to charge</h3></div><span className="step-pill">02</span></div><div className="mode-grid two">{plans.map((result) => <ModeCard key={`${result.mode}-${result.schedule_id}`} result={result} recommended={result === best} selected={selectedPlan?.schedule_id === result.schedule_id} onSelect={() => { setSelectedPlan(result); setPayment(null); }} />)}</div>{selectedPlan ? <PaymentPanel key={selectedPlan.schedule_id} plan={selectedPlan} token={token} payment={payment} onPaid={(receipt) => { setPayment(receipt); refreshProfile().catch(() => {}); }} savedPaymentMethod={paymentMethod} availablePoints={rewardPoints} /> : <p className="choose-prompt">Select one plan above to review its exact time before payment.</p>}</section>;
+}
+
+function connectorsAreCompatible(vehicle, station) {
+  if (!vehicle?.connector_types || !station?.charger_type) return true;
+  const canonical = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const stationConnector = canonical(station.charger_type);
+  return vehicle.connector_types.split(",").some((connector) => {
+    const vehicleConnector = canonical(connector);
+    return vehicleConnector && (
+      vehicleConnector.includes(stationConnector) || stationConnector.includes(vehicleConnector)
+    );
+  });
+}
+
+function PlanView({ token, vehicles, stations, paymentMethod, rewardPoints, results, setResults, setError, refreshProfile }) {
   const rankedStations = useMemo(() => [...stations].sort((a, b) => {
     const aUsable = a.operational_status === "online" && a.available_chargers > 0;
     const bUsable = b.operational_status === "online" && b.available_chargers > 0;
@@ -391,21 +686,29 @@ function PlanView({ token, vehicles, stations, paymentMethod, results, setResult
     if (a.available_chargers !== b.available_chargers) return b.available_chargers - a.available_chargers;
     return b.power_kw - a.power_kw;
   }), [stations]);
-  const recommendedStation = rankedStations.find((station) => station.operational_status === "online" && station.available_chargers > 0);
-  const [form, setForm] = useState({ vehicleId: vehicles[0]?.id ?? "", stationId: recommendedStation?.id ?? "", currentSoc: 30, targetSoc: 80, departureTime: nextMorning() });
+  const firstVehicle = vehicles[0];
+  const initialStation = rankedStations.find((station) => station.operational_status === "online" && station.available_chargers > 0 && connectorsAreCompatible(firstVehicle, station));
+  const [form, setForm] = useState({ vehicleId: firstVehicle?.id ?? "", stationId: initialStation?.id ?? "", currentSoc: 30, targetSoc: 80, startTime: nextQuarter(), departureTime: nextMorning() });
   const [busy, setBusy] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [payment, setPayment] = useState(null);
-  const best = useMemo(() => results.length ? [...results].sort((a, b) => a.cost_eur - b.cost_eur)[0] : null, [results]);
+  const best = useMemo(() => { const visible = results.filter((result) => result.mode === "normal" || result.mode === "v1g"); return visible.length ? [...visible].sort((a, b) => a.cost_eur - b.cost_eur)[0] : null; }, [results]);
+  const selectedVehicle = vehicles.find((vehicle) => vehicle.id === Number(form.vehicleId)) || firstVehicle;
+  const recommendedStation = rankedStations.find((station) => station.operational_status === "online" && station.available_chargers > 0 && connectorsAreCompatible(selectedVehicle, station));
   const selectedStation = stations.find((station) => station.id === Number(form.stationId));
 
   useEffect(() => {
-    if (!form.vehicleId && vehicles[0]) setForm((current) => ({ ...current, vehicleId: vehicles[0].id }));
+    const currentVehicle = vehicles.find((vehicle) => vehicle.id === Number(form.vehicleId));
+    if (!currentVehicle) setForm((current) => ({ ...current, vehicleId: firstVehicle?.id ?? "" }));
     const currentStation = stations.find((station) => station.id === Number(form.stationId));
-    if ((!currentStation || currentStation.operational_status !== "online" || currentStation.available_chargers < 1) && recommendedStation) {
-      setForm((current) => ({ ...current, stationId: recommendedStation.id }));
+    const stationCannotBeUsed = !currentStation
+      || currentStation.operational_status !== "online"
+      || currentStation.available_chargers < 1
+      || !connectorsAreCompatible(selectedVehicle, currentStation);
+    if (stationCannotBeUsed) {
+      setForm((current) => ({ ...current, stationId: recommendedStation?.id ?? "" }));
     }
-  }, [vehicles, stations, form.vehicleId, form.stationId, recommendedStation]);
+  }, [vehicles, stations, form.vehicleId, form.stationId, recommendedStation, selectedVehicle]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -417,8 +720,15 @@ function PlanView({ token, vehicles, stations, paymentMethod, results, setResult
     try {
       const stationId = Number(form.stationId);
       if (!stationId) throw new Error("No Austrian charging station is available.");
-      const chargingRequest = await api.post("/charging-requests", { vehicle_id: Number(form.vehicleId), station_id: stationId, current_soc: Number(form.currentSoc), target_soc: Number(form.targetSoc), departure_time: new Date(form.departureTime).toISOString() }, token);
-      const comparison = await Promise.all(["normal", "v1g", "v2g"].map((mode) => api.post(`/optimization/${chargingRequest.id}`, { mode }, token)));
+      const startTime = new Date(form.startTime);
+      const departureTime = new Date(form.departureTime);
+      if (departureTime <= startTime) throw new Error("Ready by must be after Start charging after.");
+      const chargingRequest = await api.post("/charging-requests", { vehicle_id: Number(form.vehicleId), station_id: stationId, current_soc: Number(form.currentSoc), target_soc: Number(form.targetSoc), earliest_start_time: startTime.toISOString(), departure_time: departureTime.toISOString() }, token);
+      const optionRequests = [
+        ["normal", "balanced"],
+        ["v1g", "balanced"],
+      ];
+      const comparison = await Promise.all(optionRequests.map(([mode, variant]) => api.post(`/optimization/${chargingRequest.id}`, { mode, variant }, token)));
       setResults(comparison);
       await refreshProfile();
     } catch (requestError) { setError(requestError.message); } finally { setBusy(false); }
@@ -426,35 +736,145 @@ function PlanView({ token, vehicles, stations, paymentMethod, results, setResult
 
   return (
     <section className="view-stack">
+      <StationMap stations={stations} selectedStationId={form.stationId} vehicle={selectedVehicle} onSelect={(stationId) => setForm((current) => ({ ...current, stationId }))} />
       <div className="planner-grid">
         <form className="content-card planner-card" onSubmit={submit}>
           <div className="card-heading"><div><p className="eyebrow">NEW SESSION</p><h3>Charging preferences</h3></div><span className="step-pill">01</span></div>
-          <Field label="Vehicle"><select value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}>{vehicles.length ? vehicles.map((v) => <option key={v.id} value={v.id}>{v.model} · {v.battery_capacity} kWh</option>) : <option value="">No vehicle added</option>}</select></Field>
-          <Field label="Charging station"><select value={form.stationId} onChange={(e) => setForm({ ...form, stationId: e.target.value })}>{rankedStations.length ? rankedStations.map((s) => <option key={s.id} value={s.id} disabled={s.operational_status !== "online" || s.available_chargers < 1}>{s.id === recommendedStation?.id ? "Recommended · " : ""}{s.station_name} · {s.city} · {s.available_chargers}/{s.total_chargers} free</option>) : <option value="">No station available</option>}</select></Field>
-          {selectedStation && <div className={`station-status ${selectedStation.operational_status === "online" && selectedStation.available_chargers > 0 ? "available" : "unavailable"}`}><i /><div><b>{selectedStation.available_chargers} of {selectedStation.total_chargers} chargers available</b><small>{selectedStation.power_kw} kW · {selectedStation.charger_type} · {selectedStation.availability_source} status</small></div></div>}
+          <Field label="Vehicle"><select value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })}>{vehicles.length ? vehicles.map((v) => <option key={v.id} value={v.id}>{v.model} · {v.battery_capacity} kWh · {v.connector_types}</option>) : <option value="">No vehicle added</option>}</select></Field>
+          <Field label="Charging station"><select value={form.stationId} onChange={(e) => setForm({ ...form, stationId: e.target.value })}>{!recommendedStation && <option value="">No compatible available station</option>}{rankedStations.length ? rankedStations.map((s) => { const compatible = connectorsAreCompatible(selectedVehicle, s); const unavailable = s.operational_status !== "online" || s.available_chargers < 1; return <option key={s.id} value={s.id} disabled={!compatible || unavailable}>{s.id === recommendedStation?.id ? "Recommended · " : ""}{s.station_name} · {s.city} · {s.charger_type} · {!compatible ? "Not compatible" : unavailable ? "Unavailable" : `${s.available_chargers}/${s.total_chargers} free`}</option>; }) : <option value="">No station available</option>}</select></Field>
+          {selectedStation && <div className={`station-status ${selectedStation.operational_status === "online" && selectedStation.available_chargers > 0 ? "available" : "unavailable"}`}><i /><div><b>{selectedStation.available_chargers} of {selectedStation.total_chargers} chargers available</b><small>{selectedStation.power_kw} kW · {selectedStation.charger_type} · {selectedStation.availability_source === "simulated" ? "Demo estimate, not live occupancy" : `${selectedStation.availability_source} status · updated ${selectedStation.last_status_at ? new Date(selectedStation.last_status_at).toLocaleString() : "unknown"}`}</small></div></div>}
           <div className="field-grid"><Field label="Current SoC (%)" type="number" value={form.currentSoc} onChange={(v) => setForm({ ...form, currentSoc: v })} min="0" max="99" /><Field label="Target SoC (%)" type="number" value={form.targetSoc} onChange={(v) => setForm({ ...form, targetSoc: v })} min="1" max="100" /></div>
-          <Field label="Ready by" type="datetime-local" value={form.departureTime} onChange={(v) => setForm({ ...form, departureTime: v })} />
+          <div className="field-grid planning-dates"><Field label="Car available from (you choose)" type="datetime-local" value={form.startTime} onChange={(v) => setForm({ ...form, startTime: v })} /><Field label="Car must be ready by (you choose)" type="datetime-local" value={form.departureTime} onChange={(v) => setForm({ ...form, departureTime: v })} /></div>
+          <p className="planning-window-note">You choose the dates. Smart EV chooses one exact continuous charging time inside this window and shows it before payment.</p>
           <button className="primary-button" disabled={busy}>{busy ? "Optimizing…" : "Build my smart plan"}<span>→</span></button>
         </form>
-        <article className="insight-card"><p className="eyebrow">{results[0]?.forecast_source === "machine_learning" ? "AI FORECAST ACTIVE" : "AUSTRIAN ENERGY DATA"}</p><h3>One target.<br />Three strategies.</h3><p>Smart EV predicts Austrian price, grid pressure and renewable availability for every 15-minute window before departure.</p><div className="formula"><span>55% price</span><span>30% load</span><span>15% renewables</span></div>{results[0] && <small className="model-label">Model: {results[0].model_name}</small>}</article>
+        <article className="insight-card"><p className="eyebrow">{results[0]?.forecast_source === "machine_learning" ? "SMART FORECAST READY" : "AUSTRIAN ENERGY DATA"}</p><h3>A better time<br />to charge.</h3><p>Smart EV compares the available times before your departure and recommends a period with a better price, less grid pressure and more clean energy.</p><div className="formula"><span>Price</span><span>Grid activity</span><span>Clean energy</span></div>{results[0] && <small className="model-label">Recommendation calculated automatically</small>}</article>
       </div>
-      {results.length > 0 && <section className="results-block"><div className="card-heading"><div><p className="eyebrow">COMPARISON</p><h3>Choose the smartest outcome</h3></div><span className="step-pill">02</span></div><div className="mode-grid">{results.map((result) => <ModeCard key={result.mode} result={result} recommended={result === best} selected={selectedPlan?.schedule_id === result.schedule_id} onSelect={() => { setSelectedPlan(result); setPayment(null); }} />)}</div>{selectedPlan ? <PaymentPanel key={selectedPlan.schedule_id} plan={selectedPlan} token={token} payment={payment} onPaid={setPayment} savedPaymentMethod={paymentMethod} /> : <p className="choose-prompt">Select one plan above to continue to advance payment.</p>}<article className="timeline-card"><div><p className="eyebrow">RECOMMENDED V2G PLAN</p><h3>Energy activity timeline</h3></div><div className="timeline">{results.find((item) => item.mode === "v2g")?.slots.map((slot) => <div className={`timeline-slot ${slot.action}`} key={`${slot.timestamp}-${slot.action}`} title={`${new Date(slot.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${slot.energy_kwh} kWh`} />)}</div><div className="legend"><span><i className="charge" /> Charging</span><span><i className="discharge" /> Grid export</span></div></article></section>}
+      {results.length > 0 && <PlanResults results={results} best={best} selectedPlan={selectedPlan} setSelectedPlan={setSelectedPlan} setPayment={setPayment} token={token} payment={payment} paymentMethod={paymentMethod} rewardPoints={rewardPoints} refreshProfile={refreshProfile} />}
     </section>
   );
 }
 
-function VehiclesView({ token, catalog, vehicles, setVehicles, setError }) {
+function V2GOffersView({ token, vehicles, stations, setError, refreshProfile }) {
+  const v2gVehicles = vehicles.filter((vehicle) => vehicle.supports_v2g);
+  const compatibleStations = stations.filter((station) => station.supports_v2g && station.operational_status === "online" && station.available_chargers > 0);
+  const [form, setForm] = useState({ vehicleId: v2gVehicles[0]?.id ?? "", stationId: compatibleStations[0]?.id ?? "", currentSoc: 80, minimumSoc: 60, availableUntil: nextMorning() });
+  const [offer, setOffer] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!v2gVehicles.some((vehicle) => vehicle.id === Number(form.vehicleId))) {
+      setForm((current) => ({ ...current, vehicleId: v2gVehicles[0]?.id ?? "" }));
+    }
+    const selectedVehicle = v2gVehicles.find((vehicle) => vehicle.id === Number(form.vehicleId));
+    const eligible = compatibleStations.filter((station) => connectorsAreCompatible(selectedVehicle, station));
+    if (!eligible.some((station) => station.id === Number(form.stationId))) {
+      setForm((current) => ({ ...current, stationId: eligible[0]?.id ?? "" }));
+    }
+  }, [vehicles, stations, form.vehicleId, form.stationId]);
+
+  const findOffer = async (event) => {
+    event.preventDefault(); setError(""); setBusy(true); setOffer(null);
+    try {
+      const result = await api.post("/v2g-offers", {
+        vehicle_id: Number(form.vehicleId),
+        station_id: Number(form.stationId),
+        current_soc: Number(form.currentSoc),
+        minimum_soc: Number(form.minimumSoc),
+        available_until: new Date(form.availableUntil).toISOString(),
+      }, token);
+      setOffer(result);
+    } catch (requestError) { setError(requestError.message); }
+    finally { setBusy(false); }
+  };
+
+  const answerOffer = async (answer) => {
+    setError(""); setBusy(true);
+    try {
+      const updated = await api.post(`/v2g-offers/${offer.id}/${answer}`, {}, token);
+      setOffer(updated);
+      await refreshProfile();
+    } catch (requestError) { setError(requestError.message); }
+    finally { setBusy(false); }
+  };
+
+  const simulateDelivery = async () => {
+    setError(""); setBusy(true);
+    try {
+      const completed = await api.post(`/v2g-offers/${offer.id}/simulate-delivery`, {}, token);
+      setOffer(completed);
+      await refreshProfile();
+    } catch (requestError) { setError(requestError.message); }
+    finally { setBusy(false); }
+  };
+
+  const selectedVehicle = v2gVehicles.find((vehicle) => vehicle.id === Number(form.vehicleId));
+  const selectableStations = compatibleStations.filter((station) => connectorsAreCompatible(selectedVehicle, station));
+  const offerStation = offer ? stations.find((station) => station.id === offer.station_id) : null;
+  return <section className="view-stack"><article className="v2g-hero"><div><p className="eyebrow">SEPARATE GRID SERVICE</p><h2>Earn from spare battery energy.</h2><p>Only a vehicle and station explicitly configured for bidirectional V2G can create an offer.</p></div><div className="v2g-flow"><span>Compatible car</span><b>→</b><span>V2G station</span><b>→</b><span>Meter verification</span><b>→</b><span>Wallet reward</span></div></article><div className="split-grid v2g-offers-layout"><form className="content-card" onSubmit={findOffer}><div className="card-heading"><div><p className="eyebrow">COMPATIBILITY CHECK</p><h3>Check for a V2G offer</h3></div></div><Field label="V2G-compatible vehicle"><select value={form.vehicleId} onChange={(event) => setForm({ ...form, vehicleId: event.target.value })}>{v2gVehicles.length ? v2gVehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.model} · V2G ready</option>) : <option value="">No V2G-compatible vehicle</option>}</select></Field><Field label="Bidirectional station"><select value={form.stationId} onChange={(event) => setForm({ ...form, stationId: event.target.value })}>{selectableStations.length ? selectableStations.map((station) => <option key={station.id} value={station.id}>{station.station_name} · {station.city} · {station.available_chargers}/{station.total_chargers} free</option>) : <option value="">No compatible V2G station</option>}</select></Field><div className="field-grid"><Field label="Battery now (%)" type="number" min="1" max="100" value={form.currentSoc} onChange={(value) => setForm({ ...form, currentSoc: value })} /><Field label="Minimum reserve to keep (%)" type="number" min="0" max="99" value={form.minimumSoc} onChange={(value) => setForm({ ...form, minimumSoc: value })} /></div><Field label="Car plugged in until" type="datetime-local" value={form.availableUntil} onChange={(value) => setForm({ ...form, availableUntil: value })} /><p className="planning-window-note">Project compatibility is checked for the car, station and connector before an offer is calculated.</p><button className="primary-button" disabled={busy || !selectedVehicle || !form.stationId}>{busy ? "Checking grid…" : "Check grid offers"}<span>→</span></button></form><article className="content-card v2g-offer-result"><div className="card-heading"><div><p className="eyebrow">GRID NOTIFICATION</p><h3>{offer ? "Offer details" : "No offer checked yet"}</h3></div></div>{!offer && <div className="v2g-empty-offer"><b>How it works</b><p>If the grid needs energy while your compatible car is connected to a bidirectional station, you receive one offer with the export amount, time and reward.</p></div>}{offer && <div className={`v2g-live-offer ${offer.status}`}><span className="offer-status">{offer.status === "offered" ? "NEW GRID REQUEST" : offer.status.toUpperCase()}</span><h3>Send {offer.export_energy_kwh.toFixed(2)} kWh to the grid</h3><div className="offer-reward"><small>REWARD AFTER METER CONFIRMATION</small><strong>€{offer.reward_eur.toFixed(2)}</strong><span>+ {Math.round(offer.export_energy_kwh * 10)} points</span></div><div className="offer-details"><span><b>Station</b>{offerStation ? `${offerStation.station_name} · ${offerStation.city}` : `Station #${offer.station_id}`}</span><span><b>Export time</b>{viennaDay.format(new Date(offer.export_start))} · {viennaTime.format(new Date(offer.export_start))}–{viennaTime.format(new Date(offer.export_end))}</span><span><b>Battery protection</b>Never below {offer.minimum_soc}%</span></div>{offer.status === "offered" && <div className="offer-actions"><button className="primary-button" disabled={busy} onClick={() => answerOffer("accept")}>Accept offer<span>→</span></button><button className="secondary-button" disabled={busy} onClick={() => answerOffer("decline")}>Decline</button></div>}{offer.status === "accepted" && <div className="meter-pending"><p><b>Accepted — waiting for operator meter confirmation.</b><br />No reward or points have been credited yet.</p></div>}{offer.status === "completed" && <p className="success-message">Meter confirmed {offer.delivered_energy_kwh.toFixed(2)} kWh. €{offer.credited_reward_eur.toFixed(2)} and points were credited.</p>}{offer.status === "declined" && <p className="muted">Offer declined. No battery energy or reward was recorded.</p>}</div>}<p className="payment-note">Academic simulation. The operator dashboard replaces the driver-side meter simulation.</p></article></div></section>;
+}
+
+function OperatorDashboard({ token, setError }) {
+  const [dashboard, setDashboard] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const load = () => api.get("/operator/dashboard", token).then(setDashboard).catch((error) => setError(error.message));
+  useEffect(() => { load(); }, [token]);
+
+  const updateReservation = async (reservation, statusValue) => {
+    setBusyId(`r-${reservation.id}`); setError("");
+    try { await api.patch(`/operator/reservations/${reservation.id}`, { status: statusValue }, token); await load(); }
+    catch (error) { setError(error.message); } finally { setBusyId(null); }
+  };
+  const confirmDelivery = async (offer) => {
+    const value = window.prompt("Metered energy delivered (kWh)", offer.export_energy_kwh.toFixed(2));
+    if (value === null) return;
+    setBusyId(`v-${offer.id}`); setError("");
+    try { await api.post(`/operator/v2g-offers/${offer.id}/confirm-delivery`, { delivered_energy_kwh: Number(value) }, token); await load(); }
+    catch (error) { setError(error.message); } finally { setBusyId(null); }
+  };
+
+  if (!dashboard) return <article className="content-card"><p>Loading operator dashboard…</p></article>;
+  return <section className="view-stack"><article className="operator-hero"><div><p className="eyebrow">STATION OPERATIONS</p><h2>{dashboard.station.station_name}</h2><p>{dashboard.station.city} · {dashboard.station.available_chargers}/{dashboard.station.total_chargers} chargers free · {dashboard.station.supports_v2g ? "V2G enabled" : "Charging only"}</p></div><div className="operator-kpis"><StatCard label="Confirmed bookings" value={dashboard.confirmed_reservations} detail="Upcoming station slots" /><StatCard label="V2G meter checks" value={dashboard.pending_v2g_deliveries} detail="Awaiting operator proof" /></div></article><div className="split-grid operator-tables"><article className="content-card"><div className="card-heading"><div><p className="eyebrow">BOOKINGS</p><h3>Station reservations</h3></div></div>{dashboard.reservations.length ? dashboard.reservations.map((reservation) => <div className="operator-row" key={reservation.id}><div><b>Reservation #{reservation.id}</b><small>{new Date(reservation.start_time).toLocaleString()} · Vehicle #{reservation.vehicle_id}</small></div><span className={`status-${reservation.status}`}>{reservation.status}</span>{reservation.status === "confirmed" && <div className="operator-actions"><button disabled={busyId === `r-${reservation.id}`} onClick={() => updateReservation(reservation, "completed")}>Complete</button><button disabled={busyId === `r-${reservation.id}`} onClick={() => updateReservation(reservation, "cancelled")}>Cancel</button></div>}</div>) : <EmptyCopy text="No reservations for this station." />}</article><article className="content-card"><div className="card-heading"><div><p className="eyebrow">V2G METER</p><h3>Energy verification</h3></div></div>{dashboard.v2g_offers.length ? dashboard.v2g_offers.map((offer) => <div className="operator-row" key={offer.id}><div><b>Offer #{offer.id} · {offer.export_energy_kwh.toFixed(2)} kWh</b><small>{offer.status} · reward quote €{offer.reward_eur.toFixed(2)}</small></div><span className={`status-${offer.status}`}>{offer.status}</span>{offer.status === "accepted" && <button className="primary-button compact" disabled={busyId === `v-${offer.id}`} onClick={() => confirmDelivery(offer)}>Confirm meter</button>}</div>) : <EmptyCopy text="No V2G offers for this station." />}</article></div></section>;
+}
+
+function VehiclesView({ token, catalog, vehicles, setVehicles, setResults, setError }) {
+  const [busy, setBusy] = useState(false);
+  const [removingId, setRemovingId] = useState(null);
   const submit = async (form) => {
     setBusy(true); setError("");
     try { const vehicle = await api.post("/vehicles", form, token); setVehicles([...vehicles, vehicle]); }
     catch (requestError) { setError(requestError.message); } finally { setBusy(false); }
   };
-  return <section className="view-stack"><div className="split-grid vehicles-layout"><article className="content-card"><div className="card-heading"><div><p className="eyebrow">MY GARAGE</p><h3>Connected vehicles</h3></div><span className="count-pill">{vehicles.length}</span></div>{vehicles.length ? vehicles.map((vehicle) => <VehicleRow key={vehicle.id} vehicle={vehicle} />) : <EmptyCopy text="Your garage is empty." />}</article><article className="content-card"><div className="card-heading"><div><p className="eyebrow">ADD VEHICLE</p><h3>Connect another EV</h3></div></div><VehicleForm catalog={catalog} onSubmit={submit} busy={busy} buttonLabel="Add to my garage" /></article></div></section>;
+  const remove = async (vehicle) => {
+    if (!window.confirm(`Remove ${vehicle.model} from your garage? Your previous charging history will be kept.`)) return;
+    setRemovingId(vehicle.id); setError("");
+    try {
+      await api.delete(`/vehicles/${vehicle.id}`, token);
+      setVehicles(vehicles.filter((item) => item.id !== vehicle.id));
+      setResults([]);
+    } catch (requestError) { setError(requestError.message); }
+    finally { setRemovingId(null); }
+  };
+  return <section className="view-stack"><div className="split-grid vehicles-layout"><article className="content-card"><div className="card-heading"><div><p className="eyebrow">MY GARAGE</p><h3>Connected vehicles</h3></div><span className="count-pill">{vehicles.length}</span></div>{vehicles.length ? vehicles.map((vehicle) => <VehicleRow key={vehicle.id} vehicle={vehicle} onRemove={remove} removing={removingId === vehicle.id} />) : <EmptyCopy text="Your garage is empty." />}</article><article className="content-card"><div className="card-heading"><div><p className="eyebrow">ADD VEHICLE</p><h3>Connect another EV</h3></div></div><VehicleForm catalog={catalog} onSubmit={submit} busy={busy} buttonLabel="Add to my garage" /></article></div></section>;
 }
 
-function RewardsView({ user, rewards }) {
-  return <section className="view-stack"><article className="rewards-hero"><div><p className="eyebrow">SMART EV WALLET</p><h2>€{user.wallet_balance.toFixed(2)}</h2><p>Earned by returning clean, flexible energy to the grid.</p></div><div className="points-orbit"><strong>{user.reward_points}</strong><span>points</span></div></article><article className="content-card"><div className="card-heading"><div><p className="eyebrow">ACTIVITY</p><h3>Reward history</h3></div></div>{rewards.length ? rewards.map((reward) => <RewardRow key={reward.id} reward={reward} />) : <EmptyCopy text="Complete a V2G plan to earn your first reward." />}</article></section>;
+function RewardsView({ token, user, rewards, payments }) {
+  const [filter, setFilter] = useState("all");
+  const filtered = rewards.filter((reward) => filter === "all" || reward.reward_type === filter);
+  const earnedPoints = rewards.reduce((sum, reward) => sum + reward.points, 0);
+  const v1gSavings = rewards.filter((reward) => reward.reward_type === "v1g_saving").reduce((sum, reward) => sum + reward.saving_eur, 0);
+  const v2gCash = rewards.filter((reward) => reward.reward_type === "v2g_export").reduce((sum, reward) => sum + (reward.reward || 0), 0);
+  const openInvoice = async (payment) => {
+    const invoiceWindow = window.open("", "_blank");
+    try {
+      const invoice = await api.get(`/payments/${payment.id}/invoice`, token);
+      if (!invoiceWindow) return;
+      const safe = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]));
+      invoiceWindow.document.write(`<!doctype html><html><head><title>Invoice ${safe(invoice.reference)}</title><style>body{font:15px Arial;max-width:760px;margin:50px auto;color:#102d23}h1{font-size:34px}.row{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding:12px 0}.total{font-size:22px;font-weight:bold}small{color:#68766f}@media print{button{display:none}}</style></head><body><h1>Smart EV invoice</h1><p><b>${safe(invoice.reference)}</b><br><small>${invoice.issued_at ? safe(new Date(invoice.issued_at).toLocaleString()) : ""}</small></p><div class="row"><span>Customer</span><b>${safe(invoice.customer_name)} · ${safe(invoice.customer_email)}</b></div><div class="row"><span>Vehicle / station</span><b>${safe(invoice.vehicle_model || "—")} · ${safe(invoice.station_name || "—")}</b></div><div class="row"><span>Charging time</span><b>${invoice.start_time ? safe(new Date(invoice.start_time).toLocaleString()) : "—"}</b></div><div class="row"><span>Original amount</span><b>€${invoice.original_amount.toFixed(2)}</b></div><div class="row"><span>Points discount</span><b>-€${invoice.points_discount_eur.toFixed(2)}</b></div><div class="row total"><span>Paid</span><b>€${invoice.amount_paid.toFixed(2)} ${safe(invoice.currency)}</b></div><p><small>Provider: ${safe(invoice.provider)}. Academic project invoice.</small></p><button onclick="window.print()">Print / Save PDF</button></body></html>`);
+      invoiceWindow.document.close();
+    } catch (error) { if (invoiceWindow) invoiceWindow.close(); window.alert(error.message); }
+  };
+  return <section className="view-stack"><article className="rewards-hero"><div><p className="eyebrow">SMART EV WALLET</p><h2>€{user.wallet_balance.toFixed(2)}</h2><p>V1G savings become points. Verified V2G export adds points and wallet credit.</p></div><div className="points-orbit"><strong>{user.reward_points}</strong><span>available points</span></div></article><div className="reward-summary"><StatCard label="Total points earned" value={earnedPoints} detail="Before redemptions" /><StatCard label="V1G savings" value={`€${v1gSavings.toFixed(2)}`} detail="Optimized charging value" /><StatCard label="V2G wallet earned" value={`€${v2gCash.toFixed(2)}`} detail="Meter-confirmed exports" /></div><article className="content-card"><div className="card-heading"><div><p className="eyebrow">REWARD LEDGER</p><h3>Where every point came from</h3></div><div className="reward-filters">{[["all","All"],["v1g_saving","V1G"],["v2g_export","V2G"]].map(([key,label]) => <button key={key} className={filter === key ? "active" : ""} onClick={() => setFilter(key)}>{label}</button>)}</div></div>{filtered.length ? filtered.map((reward) => <div className="reward-ledger-row" key={reward.id}><span className={`reward-type ${reward.reward_type}`}>{reward.reward_type === "v1g_saving" ? "V1G" : "V2G"}</span><div><b>{reward.reward_type === "v1g_saving" ? "Smart charging saving" : "Verified grid export"}</b><small>{reward.transaction_time ? new Date(reward.transaction_time).toLocaleString() : ""}{reward.energy_returned ? ` · ${reward.energy_returned.toFixed(2)} kWh exported` : ""}</small></div><strong>+{reward.points} pts</strong><em>{reward.reward_type === "v1g_saving" ? `€${reward.saving_eur.toFixed(2)} saved` : `€${(reward.reward || 0).toFixed(2)} earned`}</em></div>) : <EmptyCopy text="No reward transaction matches this filter." />}</article><article className="content-card"><div className="card-heading"><div><p className="eyebrow">PAYMENTS & INVOICES</p><h3>Billing history</h3></div></div>{payments.length ? payments.map((payment) => <div className="invoice-row" key={payment.id}><div><b>{payment.reference}</b><small>{payment.created_at ? new Date(payment.created_at).toLocaleString() : ""} · {payment.provider === "stripe_test" ? "Stripe test" : "Local demo"}</small></div><strong>€{payment.amount.toFixed(2)}</strong><button onClick={() => openInvoice(payment)}>View invoice</button>{payment.invoice_pdf && <a href={payment.invoice_pdf} target="_blank" rel="noreferrer">Stripe PDF</a>}</div>) : <EmptyCopy text="Paid charging reservations and their invoices will appear here." />}</article></section>;
 }
 
 function PasswordSettings({ token }) {
@@ -501,13 +921,27 @@ function SettingsView({ token, user, setUser, paymentMethod, setPaymentMethod, s
   return <section className="view-stack"><div className="split-grid settings-layout"><form className="content-card" onSubmit={save}><div className="card-heading"><div><p className="eyebrow">ACCOUNT</p><h3>Personal information</h3></div></div><Field label="Full name" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required /><Field label="Email" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} required /><button className="primary-button">Save account changes<span>→</span></button>{saved && <p className="success-message">Account updated successfully.</p>}</form><article className="content-card"><div className="card-heading"><div><p className="eyebrow">APPEARANCE</p><h3>Choose your theme</h3></div></div><div className="theme-grid">{[["light", "☀", "Light"], ["dark", "◐", "Dark"], ["system", "◒", "System"]].map(([key, icon, label]) => <button key={key} className={user.theme === key ? "active" : ""} onClick={() => setTheme(key)}><span>{icon}</span><b>{label}</b><small>{key === "system" ? "Follow your device" : `${label} all the time`}</small></button>)}</div></article></div><div className="split-grid settings-layout"><PasswordSettings token={token} /><CardSettings token={token} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} /></div></section>;
 }
 
-function AIView({ token }) {
+function ForecastActualChart({ samples }) {
+  if (!samples.length) return <p className="muted">No held-out evaluation samples available.</p>;
+  const values = samples.flatMap((sample) => [sample.actual, sample.predicted]);
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+  const range = maximum - minimum || 1;
+  const points = (key) => samples.map((sample, index) => `${(index / (samples.length - 1 || 1)) * 100},${38 - ((sample[key] - minimum) / range) * 36}`).join(" ");
+  return <div className="evaluation-chart"><svg viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label="Actual and predicted values over 96 held-out quarter-hour samples"><polyline className="actual-line" points={points("actual")} /><polyline className="predicted-line" points={points("predicted")} /></svg><div className="evaluation-legend"><span><i className="actual-dot" />Actual</span><span><i className="predicted-dot" />Predicted</span></div></div>;
+}
+
+function AIView({ token, stations }) {
   const [tab, setTab] = useState("forecast");
   const [forecast, setForecast] = useState(null);
   const [benchmark, setBenchmark] = useState(null);
+  const [modelInfo, setModelInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [stationId, setStationId] = useState(stations[0]?.id ?? "");
+  const [stationForecast, setStationForecast] = useState(null);
+  const [evaluationTarget, setEvaluationTarget] = useState("electricity_price");
 
   useEffect(() => {
     let mounted = true;
@@ -515,13 +949,18 @@ function AIView({ token }) {
     Promise.all([
       api.get("/ai/forecast-24h", token).catch(() => null),
       api.get("/ai/benchmark", token).catch(() => null),
+      api.get("/ai/model-info", token).catch(() => null),
     ])
-      .then(([fc, bm]) => {
+      .then(([fc, bm, info]) => {
         if (!mounted) return;
         setForecast(fc);
         setBenchmark(bm);
+        setModelInfo(info);
         if (fc?.slots?.length) {
-          setSelectedSlot(fc.slots[0]);
+          const preferred = fc.slots
+            .filter((slot) => slot.recommendation === "V1G_CHARGE")
+            .sort((a, b) => a.composite_score - b.composite_score)[0];
+          setSelectedSlot(preferred || fc.slots[0]);
         }
       })
       .catch((err) => {
@@ -535,10 +974,17 @@ function AIView({ token }) {
     };
   }, [token]);
 
+  useEffect(() => {
+    if (!stationId) return;
+    api.get(`/ai/stations/${stationId}/availability-24h`, token)
+      .then(setStationForecast)
+      .catch(() => setStationForecast(null));
+  }, [stationId, token]);
+
   if (loading) {
     return (
       <div className="empty-copy">
-        <p>Loading AI Day-Ahead Forecast & Benchmark…</p>
+        <p>Preparing your charging recommendations…</p>
       </div>
     );
   }
@@ -546,6 +992,33 @@ function AIView({ token }) {
   const slots = forecast?.slots || [];
   const maxPrice = Math.max(...slots.map((s) => s.electricity_price), 10);
   const minPrice = Math.min(...slots.map((s) => s.electricity_price), 0);
+  const chargeSlots = slots.filter((slot) => slot.recommendation === "V1G_CHARGE");
+  const exportSlots = slots.filter((slot) => slot.recommendation === "V2G_DISCHARGE");
+  const bestChargeSlot = chargeSlots.reduce(
+    (best, slot) => (!best || slot.composite_score < best.composite_score ? slot : best),
+    null
+  );
+  const bestExportSlot = exportSlots.reduce(
+    (best, slot) => (!best || slot.electricity_price > best.electricity_price ? slot : best),
+    null
+  );
+  const cleanestSlot = slots.reduce((best, slot) => (!best || slot.renewable_total > best.renewable_total ? slot : best), null);
+  const reliability = forecast?.summary?.average_confidence_pct ?? 0;
+  const reliabilityLabel = reliability >= 75 ? "High" : reliability >= 50 ? "Medium" : "Low";
+  const levelFor = (value, minimum, maximum) => {
+    const position = maximum === minimum ? 0.5 : (value - minimum) / (maximum - minimum);
+    return position < 0.34 ? "Low" : position < 0.67 ? "Medium" : "High";
+  };
+  const minLoad = Math.min(...slots.map((slot) => slot.grid_load), 0);
+  const maxLoad = Math.max(...slots.map((slot) => slot.grid_load), 1);
+  const minRenewable = Math.min(...slots.map((slot) => slot.renewable_total), 0);
+  const maxRenewable = Math.max(...slots.map((slot) => slot.renewable_total), 1);
+  const bestStationAvailability = stationForecast?.ready
+    ? stationForecast.slots.reduce((best, slot) => (!best || slot.availability_probability_pct > best.availability_probability_pct ? slot : best), null)
+    : null;
+  const readableSlotTime = (slot) => slot
+    ? `${viennaDay.format(new Date(slot.timestamp))} · ${viennaTime.format(new Date(slot.timestamp))}`
+    : "No slot available";
 
   return (
     <section className="view-stack ai-view-container">
@@ -553,23 +1026,21 @@ function AIView({ token }) {
         <div className="ai-hero-top">
           <div>
             <div className="ai-badge">
-              <i /> Model: {forecast?.model_name || "hist-gradient-boosting-at-v2"}
+              <i /> Smart charging assistant
             </div>
-            <h2>AI Grid & Energy Intelligence</h2>
+            <h2>Your simple energy guide</h2>
             <p>
-              Day-ahead 24-hour predictive models forecasting spot prices, grid stress,
-              and renewable production to dynamically schedule V1G charge and V2G export slots.
+              You do not need to understand AI. We check tomorrow's prices, grid activity and clean energy,
+              then tell you the best time to charge. Green means charge, blue means an optional V2G opportunity, and grey means wait.
             </p>
             {forecast?.forecast_mode === "historical_demo" && (
               <p className="muted">
-                Historical simulation based on Austrian observations through {forecast.last_observed_at}.
-                Live forecasts require a current energy-data feed.
+                Demonstration mode: these recommendations use historical Austrian data, not today's live market.
               </p>
             )}
             {forecast?.forecast_mode === "current" && (
               <p className="muted">
-                Recent Austrian input through {forecast.last_observed_at}. The model was trained
-                on 2015-2018 data and has not been validated on the current period.
+                Recommendations updated from recent Austrian energy data. Times are shown in Austria time.
               </p>
             )}
           </div>
@@ -579,39 +1050,59 @@ function AIView({ token }) {
             className={`ai-tab-btn ${tab === "forecast" ? "active" : ""}`}
             onClick={() => setTab("forecast")}
           >
-            📈 24h Predictive Timeline
+            Simple recommendations
           </button>
           <button
             className={`ai-tab-btn ${tab === "benchmark" ? "active" : ""}`}
             onClick={() => setTab("benchmark")}
           >
-            📊 Multi-Model Academic Benchmark
+            Technical details
           </button>
         </div>
       </article>
 
-      {forecast?.summary && (
+      {tab === "forecast" && (
+        <div className="ai-decision-grid">
+          <article className="ai-decision-card charge">
+            <span>OUR CHARGING RECOMMENDATION</span>
+            <strong>{readableSlotTime(bestChargeSlot)}</strong>
+            <p>{bestChargeSlot ? "Charge around this time to use a better combination of price, grid availability and clean energy." : "No preferred charging time is available yet."}</p>
+          </article>
+          <article className="ai-decision-card export">
+            <span>OPTIONAL: EARN WITH V2G</span>
+            <strong>{readableSlotTime(bestExportSlot)}</strong>
+            <p>{bestExportSlot ? "If your battery has spare energy above your reserve, the grid may offer a reward around this time." : "There is no useful V2G opportunity in this forecast."}</p>
+          </article>
+          <article className="ai-decision-card explanation">
+            <span>WHY THIS HELPS</span>
+            <strong>We compare 96 time periods</strong>
+            <p>The assistant checks every 15 minutes for the next day. You only choose the suggested time; the technical calculations stay in the background.</p>
+          </article>
+        </div>
+      )}
+
+      {tab === "forecast" && forecast?.summary && (
         <div className="stat-grid forecast-kpis">
           <StatCard
-            label="Avg Expected Price"
+            label="Market price indicator"
             value={`€${forecast.summary.avg_price_eur_mwh}`}
-            detail={`Min: €${forecast.summary.min_price_eur_mwh} · Max: €${forecast.summary.max_price_eur_mwh}`}
+            detail={`Used to compare times · your session cost is shown in Plan charging`}
             accent
           />
           <StatCard
-            label="Peak Grid Demand"
-            value={`${Math.round(forecast.summary.avg_load_mw)} MW`}
-            detail="Austrian transmission load"
+            label="Best clean-energy moment"
+            value={readableSlotTime(cleanestSlot)}
+            detail="More solar and wind should be available"
           />
           <StatCard
-            label="Solar Peak Inflow"
-            value={`${Math.round(forecast.summary.solar_peak_mw)} MW`}
-            detail="Photovoltaic generation peak"
+            label="Prediction reliability"
+            value={reliabilityLabel}
+            detail={`${reliability}% · recommendations are estimates, not guarantees`}
           />
           <StatCard
-            label="Total Clean Energy"
-            value={`${Math.round(forecast.summary.total_renewable_mwh)} MWh`}
-            detail="Solar + Wind available"
+            label="Recommended charging periods"
+            value={`${chargeSlots.length}`}
+            detail="Each period represents 15 minutes"
           />
         </div>
       )}
@@ -620,13 +1111,13 @@ function AIView({ token }) {
         <article className="forecast-visual-card">
           <div className="forecast-visual-header">
             <div>
-              <p className="eyebrow">DAY-AHEAD 96-SLOT HORIZON (15-MIN RESOLUTION)</p>
-              <h3>Quarter-Hourly Electricity Price & Dispatch Timeline</h3>
+              <p className="eyebrow">YOUR NEXT 24 HOURS · TAP ANY BAR FOR DETAILS</p>
+              <h3>What should I do and when?</h3>
             </div>
             <div className="forecast-legend">
-              <span><i className="legend-charge" /> V1G Optimal Charge</span>
-              <span><i className="legend-discharge" /> V2G Peak Export</span>
-              <span><i className="legend-standard" /> Standard Grid</span>
+              <span><i className="legend-charge" /> Charge</span>
+              <span><i className="legend-discharge" /> V2G export</span>
+              <span><i className="legend-standard" /> Wait</span>
             </div>
           </div>
 
@@ -660,7 +1151,7 @@ function AIView({ token }) {
           {selectedSlot && (
             <div className="slot-inspector">
               <div>
-                <small className="muted">QUARTER-HOUR SLOT</small>
+                <small className="muted">SELECTED TIME</small>
                 <div>
                   <b>
                     {new Date(selectedSlot.timestamp).toLocaleDateString([], { month: "short", day: "numeric" })} · {new Date(selectedSlot.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -668,23 +1159,25 @@ function AIView({ token }) {
                 </div>
               </div>
               <div>
-                <small className="muted">PRICE (€/MWH)</small>
+                <small className="muted">EXPECTED ELECTRICITY PRICE</small>
                 <div><b>€{selectedSlot.electricity_price}</b></div>
+                {selectedSlot.price_interval && <small className="muted">Likely range: €{selectedSlot.price_interval[0]}–€{selectedSlot.price_interval[1]}</small>}
+                <small className="muted">Market indicator per MWh, not the amount you will pay.</small>
               </div>
               <div>
-                <small className="muted">GRID LOAD</small>
-                <div><b>{selectedSlot.grid_load} MW</b></div>
+                <small className="muted">GRID ACTIVITY</small>
+                <div><b>{levelFor(selectedSlot.grid_load, minLoad, maxLoad)}</b></div>
+                <small className="muted">Lower activity is generally better for charging.</small>
               </div>
               <div>
-                <small className="muted">RENEWABLES</small>
-                <div>
-                  <b>{selectedSlot.renewable_total} MW</b>{" "}
-                  <small className="muted">(☀️ {selectedSlot.solar_generation} + 💨 {selectedSlot.wind_generation})</small>
-                </div>
+                <small className="muted">CLEAN ENERGY AVAILABLE</small>
+                <div><b>{levelFor(selectedSlot.renewable_total, minRenewable, maxRenewable)}</b></div>
+                <small className="muted">Based on expected solar and wind production.</small>
               </div>
               <div>
-                <small className="muted">COMPOSITE SCORE</small>
-                <div><b>{selectedSlot.composite_score}</b></div>
+                <small className="muted">PREDICTION RELIABILITY</small>
+                <div><b>{selectedSlot.confidence_pct >= 75 ? "High" : selectedSlot.confidence_pct >= 50 ? "Medium" : "Low"}</b></div>
+                {selectedSlot.confidence_pct != null && <small className="muted">{selectedSlot.confidence_pct}% · actual conditions can change.</small>}
               </div>
               <div>
                 <span
@@ -697,14 +1190,23 @@ function AIView({ token }) {
                   }`}
                 >
                   {selectedSlot.recommendation === "V1G_CHARGE"
-                    ? "⚡ V1G Optimal Charge"
+                    ? "Charge during this period"
                     : selectedSlot.recommendation === "V2G_DISCHARGE"
-                    ? "🔋 V2G Peak Export"
-                    : "Standard Grid Slot"}
+                    ? "Export energy during this period"
+                    : "Wait — no action recommended"}
                 </span>
+                <small className="slot-explanation">{selectedSlot.recommendation === "V1G_CHARGE" ? "A better moment to charge because price and grid activity are favourable." : selectedSlot.recommendation === "V2G_DISCHARGE" ? "The grid may value spare battery energy more during this period." : "Waiting may provide a better charging or V2G opportunity later."}</small>
               </div>
             </div>
           )}
+        </article>
+      )}
+
+      {tab === "forecast" && (
+        <article className="content-card station-ai-readiness">
+          <div className="card-heading"><div><p className="eyebrow">CHARGING STATION</p><h3>Will a charger probably be free?</h3></div></div>
+          <Field label="Charging station"><select value={stationId} onChange={(event) => setStationId(event.target.value)}>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_name} · {station.city}</option>)}</select></Field>
+          {stationForecast?.ready ? <p className="success-message">Best expected availability: {bestStationAvailability?.availability_probability_pct}% around {bestStationAvailability ? readableSlotTime(bestStationAvailability) : "the selected period"}.</p> : <p className="muted">We are still learning this station's busy and quiet times. Current connector availability remains visible in Plan charging. {stationForecast && `${stationForecast.observations}/${stationForecast.required_observations} readings collected.`}</p>}
         </article>
       )}
 
@@ -713,12 +1215,16 @@ function AIView({ token }) {
           <div className="card-heading">
             <div>
               <p className="eyebrow">ACADEMIC RIGOR & EMPIRICAL EVALUATION</p>
-              <h3>Multi-Model Benchmark (Held-out 19,674 test observations)</h3>
+              <h3>Chronological model evaluation</h3>
             </div>
           </div>
           <p className="muted" style={{ marginBottom: "20px" }}>
-            Comparison against baseline and alternative architectures on 4 continuous Austrian energy targets under the DDM1 chronological split protocol.
+            V3 selects Ridge or HistGradientBoosting per target on validation data, then reports performance on a later unseen test period.
           </p>
+
+          {modelInfo?.model_type === "direct_multi_horizon" && <div className="benchmark-table-wrapper" style={{ marginBottom: "24px" }}><table className="benchmark-table"><thead><tr><th>V3 target</th><th>Selected model</th><th>Test MAE</th><th>Test RMSE</th><th>R²</th><th>80% interval coverage</th></tr></thead><tbody>{Object.entries(modelInfo.metrics).map(([target, result]) => <tr key={target} className="winner"><td>{target.replaceAll("_", " ")}</td><td>{result.selected_model}</td><td>{result.test.mae.toFixed(2)}</td><td>{result.test.rmse.toFixed(2)}</td><td>{result.test.r2.toFixed(3)}</td><td>{(result.test.interval_80_coverage * 100).toFixed(1)}%</td></tr>)}</tbody></table></div>}
+
+          {modelInfo?.evaluation_samples && <div className="evaluation-panel"><div className="evaluation-heading"><div><p className="eyebrow">UNSEEN TEST PERIOD</p><h4>Forecast vs actual</h4></div><select value={evaluationTarget} onChange={(event) => setEvaluationTarget(event.target.value)}>{Object.keys(modelInfo.evaluation_samples).map((target) => <option key={target} value={target}>{target.replaceAll("_", " ")}</option>)}</select></div><ForecastActualChart samples={modelInfo.evaluation_samples[evaluationTarget] || []} /></div>}
 
           {["electricity_price", "grid_load", "solar_generation", "wind_generation"].map((target) => {
             const readable = target.replace("_", " ").toUpperCase();
@@ -748,7 +1254,7 @@ function AIView({ token }) {
                           <tr key={m.model_name} className={isWinner ? "winner" : ""}>
                             <td>
                               {m.model_name}
-                              {isWinner && <span className="winner-pill">Active V2</span>}
+                              {isWinner && <span className="winner-pill">Legacy benchmark winner</span>}
                             </td>
                             <td>{met ? met.mae.toFixed(4) : "—"}</td>
                             <td>{met ? met.rmse.toFixed(4) : "—"}</td>

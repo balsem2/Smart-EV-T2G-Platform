@@ -40,7 +40,9 @@ def run_optimization(
     try:
         forecast_rows = forecast_energy(
             energy_rows,
-            charging_request.created_at or datetime.now(timezone.utc).replace(tzinfo=None),
+            charging_request.earliest_start_time
+            or charging_request.created_at
+            or datetime.now(timezone.utc).replace(tzinfo=None),
             charging_request.departure_time,
         )
         forecast_model_name = model_metadata()["model_name"]
@@ -55,6 +57,7 @@ def run_optimization(
             station,
             energy_rows,
             options.mode,
+            variant=options.variant,
             forecast_rows=forecast_rows,
             forecast_model_name=forecast_model_name,
         )
@@ -67,9 +70,11 @@ def run_optimization(
         schedule_id=schedule.id,
         request_id=request_id,
         mode=result["mode"],
+        variant=result["variant"],
         predicted_energy_kwh=result["energy_needed"],
         predicted_duration_hours=result["predicted_duration"],
         cost_eur=result["cost"],
+        net_cost_eur=result["net_cost"],
         saving_eur=result["saving"],
         v2g_energy_kwh=result["v2g_energy"],
         v2g_reward_eur=result["v2g_reward"],

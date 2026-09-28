@@ -1,1 +1,1 @@
-"""Balsem Smart EV backend application."""
+"""Smart EV backend application."""

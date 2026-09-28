@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 async function request(path, options = {}, token = null) {
   const response = await fetch(`${API_URL}${path}`, {
@@ -9,7 +9,7 @@ async function request(path, options = {}, token = null) {
     },
     ...options,
   });
-  const body = await response.json();
+  const body = response.status === 204 ? null : await response.json();
   if (!response.ok) {
     const detail = typeof body.detail === "string" ? body.detail : "Request failed";
     throw new Error(detail);
@@ -23,4 +23,5 @@ export const api = {
     request(path, { method: "POST", body: JSON.stringify(body) }, token),
   patch: (path, body, token) =>
     request(path, { method: "PATCH", body: JSON.stringify(body) }, token),
+  delete: (path, token) => request(path, { method: "DELETE" }, token),
 };
