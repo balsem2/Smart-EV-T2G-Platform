@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 from app.ml.energy_forecaster import forecast_energy, predict_target
+from app.ml.live_prices import parse_price_payload
 from scripts.sync_energy_charts import latest_contiguous_window, merged_rows
 
 
@@ -56,6 +57,25 @@ class EnergyForecasterTests(unittest.TestCase):
         rows = merged_rows(power, price)
         self.assertEqual([row["electricity_price"] for row in rows], [90, 100])
         self.assertEqual(len(latest_contiguous_window(rows)), 2)
+
+    def test_published_prices_are_normalized_to_utc(self):
+        payload = {
+            "country": "at",
+            "unit": "EUR / MWh",
+            "interval_minutes": 15,
+            "data": [
+                {
+                    "timestamp": "2026-09-29T12:00:00+02:00",
+                    "values": {"day_ahead_price": 51.25},
+                }
+            ],
+        }
+        prices = parse_price_payload(
+            payload,
+            datetime(2026, 9, 29, 9, 0),
+            datetime(2026, 9, 29, 11, 0),
+        )
+        self.assertEqual(prices, {datetime(2026, 9, 29, 10, 0): 51.25})
 
 
 if __name__ == "__main__":

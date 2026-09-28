@@ -1001,6 +1001,8 @@ function AIView({ token, stations }) {
   }
 
   const slots = forecast?.slots || [];
+  const hourlyPrices = forecast?.hourly_prices || [];
+  const bestChargingWindow = forecast?.best_charging_window;
   const maxPrice = Math.max(...slots.map((s) => s.electricity_price), 10);
   const minPrice = Math.min(...slots.map((s) => s.electricity_price), 0);
   const chargeSlots = slots.filter((slot) => slot.recommendation === "V1G_CHARGE");
@@ -1030,6 +1032,14 @@ function AIView({ token, stations }) {
   const readableSlotTime = (slot) => slot
     ? `${viennaDay.format(new Date(slot.timestamp))} · ${viennaTime.format(new Date(slot.timestamp))}`
     : "No slot available";
+  const readableWindow = (window) => window
+    ? `${viennaDay.format(new Date(window.start_time))} · ${viennaTime.format(new Date(window.start_time))}–${viennaTime.format(new Date(window.end_time))}`
+    : "No period available";
+  const priceSourceLabel = (source) => source === "published_day_ahead"
+    ? "Published Austrian day-ahead price"
+    : source === "mixed"
+      ? "Published price + AI forecast"
+      : "AI price forecast";
 
   return (
     <section className="view-stack ai-view-container">
@@ -1051,7 +1061,7 @@ function AIView({ token, stations }) {
             )}
             {forecast?.forecast_mode === "current" && (
               <p className="muted">
-                Recommendations updated from recent Austrian energy data. Times are shown in Austria time.
+                Real AI forecast updated from recent Austrian energy data. {forecast.published_price_slots} of {forecast.slot_count} price periods use published day-ahead market prices. Times are shown in Austria time.
               </p>
             )}
           </div>
@@ -1075,9 +1085,9 @@ function AIView({ token, stations }) {
       {tab === "forecast" && (
         <div className="ai-decision-grid">
           <article className="ai-decision-card charge">
-            <span>OUR CHARGING RECOMMENDATION</span>
-            <strong>{readableSlotTime(bestChargeSlot)}</strong>
-            <p>{bestChargeSlot ? "Charge around this time to use a better combination of price, grid availability and clean energy." : "No preferred charging time is available yet."}</p>
+            <span>BEST 1-HOUR CHARGING PERIOD</span>
+            <strong>{readableWindow(bestChargingWindow)}</strong>
+            <p>{bestChargingWindow ? `Average market price €${bestChargingWindow.average_price_eur_mwh}/MWh (€${bestChargingWindow.average_price_eur_kwh}/kWh). ${priceSourceLabel(bestChargingWindow.price_source)}.` : "No preferred charging period is available yet."}</p>
           </article>
           <article className="ai-decision-card export">
             <span>OPTIONAL: EARN WITH V2G</span>
@@ -1095,9 +1105,9 @@ function AIView({ token, stations }) {
       {tab === "forecast" && forecast?.summary && (
         <div className="stat-grid forecast-kpis">
           <StatCard
-            label="Market price indicator"
-            value={`€${forecast.summary.avg_price_eur_mwh}`}
-            detail={`Used to compare times · your session cost is shown in Plan charging`}
+            label="Average wholesale price"
+            value={`€${forecast.summary.avg_price_eur_mwh}/MWh`}
+            detail={`${priceSourceLabel(forecast.price_source)} · final station price is separate`}
             accent
           />
           <StatCard
@@ -1116,6 +1126,46 @@ function AIView({ token, stations }) {
             detail="Each period represents 15 minutes"
           />
         </div>
+      )}
+
+      {tab === "forecast" && hourlyPrices.length > 0 && (
+        <article className="content-card hourly-price-card">
+          <div className="card-heading">
+            <div>
+              <p className="eyebrow">AUSTRIAN PRICE BY HOUR</p>
+              <h3>When electricity is cheaper</h3>
+            </div>
+            <span className={`data-source-pill ${forecast.price_source}`}>
+              {priceSourceLabel(forecast.price_source)}
+            </span>
+          </div>
+          <p className="market-price-warning">These are wholesale market prices. The station operator's retail tariff, taxes and charging fees are not included.</p>
+          <div className="hourly-price-grid">
+            {hourlyPrices.map((hour) => (
+              <button
+                type="button"
+                key={hour.austria_hour}
+                className={`hourly-price-row ${hour.action.toLowerCase()} ${bestChargingWindow && new Date(hour.start_time) <= new Date(bestChargingWindow.start_time) && new Date(hour.end_time) > new Date(bestChargingWindow.start_time) ? "best" : ""}`}
+                onClick={() => {
+                  const matchingSlot = slots.find((slot) => new Date(slot.timestamp) >= new Date(hour.start_time) && new Date(slot.timestamp) < new Date(hour.end_time));
+                  if (matchingSlot) setSelectedSlot(matchingSlot);
+                }}
+              >
+                <span>{viennaTime.format(new Date(hour.start_time))}–{viennaTime.format(new Date(hour.end_time))}</span>
+                <strong>€{hour.price_eur_mwh.toFixed(2)}<small>/MWh</small></strong>
+                <small>€{hour.price_eur_kwh.toFixed(4)}/kWh</small>
+                <em>{hour.action === "CHARGE" ? "Good to charge" : hour.action === "V2G_EXPORT" ? "V2G opportunity" : "Wait"}</em>
+              </button>
+            ))}
+          </div>
+        </article>
+      )}
+
+      {tab === "forecast" && forecast?.tips?.length > 0 && (
+        <article className="content-card ai-tips-card">
+          <div className="card-heading"><div><p className="eyebrow">SMART TIPS</p><h3>How to use this recommendation</h3></div></div>
+          <div className="ai-tip-grid">{forecast.tips.map((tip, index) => <div key={tip}><b>{String(index + 1).padStart(2, "0")}</b><p>{tip}</p></div>)}</div>
+        </article>
       )}
 
       {tab === "forecast" && (
@@ -1170,10 +1220,11 @@ function AIView({ token, stations }) {
                 </div>
               </div>
               <div>
-                <small className="muted">EXPECTED ELECTRICITY PRICE</small>
-                <div><b>€{selectedSlot.electricity_price}</b></div>
+                <small className="muted">WHOLESALE ELECTRICITY PRICE</small>
+                <div><b>€{selectedSlot.electricity_price}/MWh</b></div>
+                <small className="muted">€{(selectedSlot.electricity_price / 1000).toFixed(4)}/kWh · {priceSourceLabel(selectedSlot.price_source)}</small>
                 {selectedSlot.price_interval && <small className="muted">Likely range: €{selectedSlot.price_interval[0]}–€{selectedSlot.price_interval[1]}</small>}
-                <small className="muted">Market indicator per MWh, not the amount you will pay.</small>
+                <small className="muted">Not the final station tariff.</small>
               </div>
               <div>
                 <small className="muted">GRID ACTIVITY</small>

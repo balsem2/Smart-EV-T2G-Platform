@@ -204,6 +204,10 @@ button { cursor: pointer; }
 .ai-decision-card.explanation { background: var(--field); }
 
 .forecast-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.data-source-pill { align-self: flex-start; padding: 7px 11px; border-radius: 99px; color: #785d05; background: #fff1b6; font-size: 9px; font-weight: 900; text-transform: uppercase; }.data-source-pill.published_day_ahead { color: #17623f; background: #daf3e5; }.data-source-pill.mixed { color: #164e9a; background: #dceafd; }
+.market-price-warning { margin: -5px 0 18px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.hourly-price-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }.hourly-price-row { min-width: 0; padding: 13px; display: grid; gap: 4px; border: 1px solid var(--line); border-radius: 12px; color: var(--text); background: var(--field); text-align: left; }.hourly-price-row:hover { border-color: var(--green); }.hourly-price-row.best { border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); }.hourly-price-row > span { color: var(--muted); font-size: 10px; }.hourly-price-row strong { font: 800 17px "Manrope"; }.hourly-price-row strong small { margin-left: 2px; color: var(--muted); font: 600 9px "Manrope"; }.hourly-price-row > small { color: var(--muted); font-size: 9px; }.hourly-price-row em { margin-top: 4px; color: var(--muted); font-size: 9px; font-style: normal; font-weight: 800; }.hourly-price-row.charge em { color: var(--green); }.hourly-price-row.v2g_export em { color: var(--blue); }
+.ai-tip-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }.ai-tip-grid > div { padding: 15px; display: flex; align-items: flex-start; gap: 12px; border-radius: 12px; background: var(--field); }.ai-tip-grid b { color: var(--green); font: 800 12px "Manrope"; }.ai-tip-grid p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
 .forecast-visual-card { padding: 26px; border: 1px solid var(--line); border-radius: 20px; background: var(--paper); }
 .forecast-visual-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
 .forecast-legend { display: flex; gap: 16px; font-size: 11px; color: var(--muted); }
@@ -241,6 +245,8 @@ button { cursor: pointer; }
 @media (max-width: 900px) {
   .forecast-kpis { grid-template-columns: 1fr 1fr; }
   .ai-decision-grid { grid-template-columns: 1fr; }
+  .hourly-price-grid { grid-template-columns: repeat(2, 1fr); }
+  .ai-tip-grid { grid-template-columns: 1fr; }
 }
 
 /* Station map, reservations, notifications and operator console */

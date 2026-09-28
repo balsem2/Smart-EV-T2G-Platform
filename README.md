@@ -196,6 +196,16 @@ fed recursively into the next. Ridge and HistGradientBoosting compete separately
 for each energy target; the validation winner is tested on later unseen data.
 Quantile models also provide an empirical 80% prediction interval.
 
+The customer-facing assistant now requests Austria's published 15-minute
+day-ahead market prices from Energy-Charts and aggregates them into an hourly
+price view. Published prices replace the model's price estimate only for the
+timestamps actually returned by the public source; missing periods remain
+clearly labelled as AI forecasts. Grid load, solar and wind remain model
+forecasts and are combined with price to rank the best continuous one-hour
+charging window. These are wholesale EUR/MWh prices, not a charging-station
+retail tariff. The platform never invents operator fees that are absent from
+the source data.
+
 Training artifacts and metrics are generated with:
 
 ```powershell
