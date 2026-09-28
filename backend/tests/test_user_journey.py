@@ -3,6 +3,7 @@
 import unittest
 from math import floor
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -76,6 +77,9 @@ class UserJourneyTests(unittest.TestCase):
         )
 
     def setUp(self):
+        # API tests must stay isolated from a locally running SMTP demo service.
+        self.email_patcher = patch("app.routers.auth.send_account_email", return_value=False)
+        self.email_patcher.start()
         self.engine = create_engine(
             "sqlite+pysqlite:///:memory:",
             connect_args={"check_same_thread": False},
@@ -121,6 +125,7 @@ class UserJourneyTests(unittest.TestCase):
         self.client.close()
         app.dependency_overrides.clear()
         self.engine.dispose()
+        self.email_patcher.stop()
 
     def test_register_vehicle_plan_and_advance_demo_payment(self):
         registered = self.register_verified("Demo User", "demo@example.com")

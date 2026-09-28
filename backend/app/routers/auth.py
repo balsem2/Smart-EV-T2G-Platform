@@ -43,7 +43,7 @@ def register(
             "Email is already registered.",
         ) from error
     verification_token = create_account_token(database_session, user, "verify_email", 24 * 60)
-    send_account_email(
+    sent = send_account_email(
         user.email,
         "Verify your Smart EV email",
         f"{settings.frontend_url}/?verify_token={verification_token}",
@@ -52,7 +52,9 @@ def register(
     return schemas.RegistrationResponse(
         email=user.email,
         message="Account created. Verify your email before signing in.",
-        development_token=verification_token if settings.app_env == "development" else None,
+        development_token=(
+            verification_token if settings.app_env == "development" and not sent else None
+        ),
     )
 
 

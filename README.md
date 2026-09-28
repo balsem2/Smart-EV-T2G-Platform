@@ -145,9 +145,16 @@ and any CVC on the Stripe-hosted page. Never enter a real card in test mode.
 Without a Stripe key, Smart EV keeps the local academic checkout available.
 
 Email verification tokens expire after 24 hours and password-reset tokens after
-30 minutes; both are single-use. Configure the `SMTP_*` variables in
-`backend/.env` to send real emails. With no SMTP in development, the interface
-receives a local development token so the complete flow remains testable.
+30 minutes; both are single-use. For the local demo, start the included SMTP
+catcher from the project root in another terminal:
+
+```powershell
+.\.venv\Scripts\python.exe -m backend.scripts.local_mail_server
+```
+
+Then open <http://localhost:8025> to read verification and password-reset emails.
+The local catcher never contacts an external email provider. A deployed environment
+must replace the local `SMTP_*` values with authenticated provider credentials.
 
 For a confirmed **V2G demo** plan, checkout credits the quoted simulated
 export reward to the demo wallet and 10 points per simulated kWh. Normal and
