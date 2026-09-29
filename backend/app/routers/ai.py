@@ -4,19 +4,12 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-import math
-import numpy as np
-import pandas as pd
-from sklearn.ensemble import HistGradientBoostingRegressor
-from sklearn.metrics import mean_absolute_error
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import crud
 from app.database import get_db
 from app.ml.energy_forecaster import MAX_FEED_LAG, forecast_energy, model_metadata
 from app.ml.live_prices import fetch_austrian_day_ahead_prices
-from app.models import Station, StationAvailabilityObservation
 
 
 router = APIRouter(prefix="/ai", tags=["AI"])
@@ -316,65 +309,3 @@ def get_24h_forecast(
         "slots": enhanced_slots,
     }
 
-
-@router.get("/stations/{station_id}/availability-24h")
-def station_availability_forecast(
-    station_id: int,
-    database_session: Session = Depends(get_db),
-) -> dict:
-    """Train only when sufficient real/simulator telemetry exists; never fabricate occupancy AI."""
-    station = database_session.get(Station, station_id)
-    if station is None or not station.active:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Active station not found.")
-    observations = list(database_session.scalars(
-        select(StationAvailabilityObservation)
-        .where(StationAvailabilityObservation.station_id == station_id)
-        .order_by(StationAvailabilityObservation.observed_at)
-    ))
-    required = 192
-    if len(observations) < required:
-        return {
-            "ready": False,
-            "station_id": station_id,
-            "observations": len(observations),
-            "required_observations": required,
-            "reason": "Not enough timestamped occupancy telemetry. Current availability is shown, but no AI probability is invented.",
-        }
-
-    timestamps = pd.DatetimeIndex([row.observed_at for row in observations])
-    quarters = timestamps.hour * 4 + timestamps.minute // 15
-    features = pd.DataFrame({
-        "quarter_sin": np.sin(2 * math.pi * quarters / 96),
-        "quarter_cos": np.cos(2 * math.pi * quarters / 96),
-        "weekday_sin": np.sin(2 * math.pi * timestamps.dayofweek / 7),
-        "weekday_cos": np.cos(2 * math.pi * timestamps.dayofweek / 7),
-        "is_weekend": (timestamps.dayofweek >= 5).astype(int),
-    })
-    target = np.array([row.available_chargers / max(row.total_chargers, 1) for row in observations])
-    split = max(int(len(features) * 0.8), 1)
-    model = HistGradientBoostingRegressor(max_iter=100, random_state=42)
-    model.fit(features.iloc[:split], target[:split])
-    validation_mae = float(mean_absolute_error(target[split:], model.predict(features.iloc[split:]))) if split < len(features) else None
-    model.fit(features, target)
-    start = datetime.now(timezone.utc).replace(second=0, microsecond=0)
-    start += timedelta(minutes=(15 - start.minute % 15) % 15)
-    future = pd.date_range(start=start.replace(tzinfo=None), periods=96, freq="15min")
-    future_quarters = future.hour * 4 + future.minute // 15
-    future_features = pd.DataFrame({
-        "quarter_sin": np.sin(2 * math.pi * future_quarters / 96),
-        "quarter_cos": np.cos(2 * math.pi * future_quarters / 96),
-        "weekday_sin": np.sin(2 * math.pi * future.dayofweek / 7),
-        "weekday_cos": np.cos(2 * math.pi * future.dayofweek / 7),
-        "is_weekend": (future.dayofweek >= 5).astype(int),
-    })
-    prediction = np.clip(model.predict(future_features), 0, 1)
-    return {
-        "ready": True,
-        "station_id": station_id,
-        "observations": len(observations),
-        "validation_mae": round(validation_mae, 4) if validation_mae is not None else None,
-        "slots": [
-            {"timestamp": timestamp.replace(tzinfo=timezone.utc).isoformat(), "availability_probability_pct": round(float(value) * 100, 1)}
-            for timestamp, value in zip(future, prediction)
-        ],
-    }

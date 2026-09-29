@@ -563,7 +563,7 @@ export default function App() {
         {active === "overview" && <Overview user={user} vehicles={vehicles} stations={stations} requests={requests} rewards={rewards} reservations={reservations} setActive={setActive} />}
         {active === "plan" && <PlanView token={token} vehicles={vehicles} stations={stations} paymentMethod={paymentMethod} rewardPoints={user.reward_points} results={results} setResults={setResults} setError={setError} refreshProfile={refreshProfile} />}
         {active === "v2g" && <V2GOffersView token={token} vehicles={vehicles} stations={stations} setError={setError} refreshProfile={refreshProfile} />}
-        {active === "ai" && <AIView token={token} stations={stations} />}
+        {active === "ai" && <AIView token={token} />}
         {active === "vehicles" && <VehiclesView token={token} catalog={catalog} vehicles={vehicles} setVehicles={setVehicles} setResults={setResults} setError={setError} />}
         {active === "rewards" && <RewardsView token={token} user={user} rewards={rewards} payments={payments} />}
         {active === "operator" && ["operator", "admin"].includes(user.role) && <OperatorDashboard token={token} stations={stations} setError={setError} />}
@@ -942,7 +942,7 @@ function ForecastActualChart({ samples }) {
   return <div className="evaluation-chart"><svg viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label="Actual and predicted values over 96 held-out quarter-hour samples"><polyline className="actual-line" points={points("actual")} /><polyline className="predicted-line" points={points("predicted")} /></svg><div className="evaluation-legend"><span><i className="actual-dot" />Actual</span><span><i className="predicted-dot" />Predicted</span></div></div>;
 }
 
-function AIView({ token, stations }) {
+function AIView({ token }) {
   const [tab, setTab] = useState("forecast");
   const [forecast, setForecast] = useState(null);
   const [benchmark, setBenchmark] = useState(null);
@@ -950,8 +950,6 @@ function AIView({ token, stations }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedSlot, setSelectedSlot] = useState(null);
-  const [stationId, setStationId] = useState(stations[0]?.id ?? "");
-  const [stationForecast, setStationForecast] = useState(null);
   const [evaluationTarget, setEvaluationTarget] = useState("electricity_price");
 
   useEffect(() => {
@@ -984,13 +982,6 @@ function AIView({ token, stations }) {
       mounted = false;
     };
   }, [token]);
-
-  useEffect(() => {
-    if (!stationId) return;
-    api.get(`/ai/stations/${stationId}/availability-24h`, token)
-      .then(setStationForecast)
-      .catch(() => setStationForecast(null));
-  }, [stationId, token]);
 
   if (loading) {
     return (
@@ -1026,9 +1017,6 @@ function AIView({ token, stations }) {
   const maxLoad = Math.max(...slots.map((slot) => slot.grid_load), 1);
   const minRenewable = Math.min(...slots.map((slot) => slot.renewable_total), 0);
   const maxRenewable = Math.max(...slots.map((slot) => slot.renewable_total), 1);
-  const bestStationAvailability = stationForecast?.ready
-    ? stationForecast.slots.reduce((best, slot) => (!best || slot.availability_probability_pct > best.availability_probability_pct ? slot : best), null)
-    : null;
   const readableSlotTime = (slot) => slot
     ? `${viennaDay.format(new Date(slot.timestamp))} · ${viennaTime.format(new Date(slot.timestamp))}`
     : "No slot available";
@@ -1261,14 +1249,6 @@ function AIView({ token, stations }) {
               </div>
             </div>
           )}
-        </article>
-      )}
-
-      {tab === "forecast" && (
-        <article className="content-card station-ai-readiness">
-          <div className="card-heading"><div><p className="eyebrow">CHARGING STATION</p><h3>Will a charger probably be free?</h3></div></div>
-          <Field label="Charging station"><select value={stationId} onChange={(event) => setStationId(event.target.value)}>{stations.map((station) => <option key={station.id} value={station.id}>{station.station_name} · {station.city}</option>)}</select></Field>
-          {stationForecast?.ready ? <p className="success-message">Best expected availability: {bestStationAvailability?.availability_probability_pct}% around {bestStationAvailability ? readableSlotTime(bestStationAvailability) : "the selected period"}.</p> : <p className="muted">We are still learning this station's busy and quiet times. Current connector availability remains visible in Plan charging. {stationForecast && `${stationForecast.observations}/${stationForecast.required_observations} readings collected.`}</p>}
         </article>
       )}
 
