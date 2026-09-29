@@ -997,6 +997,9 @@ function AIView({ token }) {
   const maxPrice = Math.max(...slots.map((s) => s.electricity_price), 10);
   const minPrice = Math.min(...slots.map((s) => s.electricity_price), 0);
   const chargeSlots = slots.filter((slot) => slot.recommendation === "V1G_CHARGE");
+  const recommendedChargeMinutes = chargeSlots.length * 15;
+  const bestHourPricePerKwh = bestChargingWindow?.average_price_eur_kwh ?? null;
+  const exampleHourlyChargingCost = bestHourPricePerKwh == null ? null : bestHourPricePerKwh * 11;
   const exportSlots = slots.filter((slot) => slot.recommendation === "V2G_DISCHARGE");
   const bestChargeSlot = chargeSlots.reduce(
     (best, slot) => (!best || slot.composite_score < best.composite_score ? slot : best),
@@ -1084,8 +1087,8 @@ function AIView({ token }) {
           </article>
           <article className="ai-decision-card explanation">
             <span>WHY THIS HELPS</span>
-            <strong>We compare 96 time periods</strong>
-            <p>The assistant checks every 15 minutes for the next day. You only choose the suggested time; the technical calculations stay in the background.</p>
+            <strong>We compare the next 24 hours</strong>
+            <p>The assistant checks prices and grid conditions throughout the day. You only choose the suggested time; the technical calculations stay in the background.</p>
           </article>
         </div>
       )}
@@ -1093,9 +1096,9 @@ function AIView({ token }) {
       {tab === "forecast" && forecast?.summary && (
         <div className="stat-grid forecast-kpis">
           <StatCard
-            label="Average wholesale price"
-            value={`€${forecast.summary.avg_price_eur_mwh}/MWh`}
-            detail={`${priceSourceLabel(forecast.price_source)} · final station price is separate`}
+            label="Best 1-hour average market price"
+            value={bestHourPricePerKwh == null ? "Unavailable" : `€${bestHourPricePerKwh.toFixed(4)}/kWh`}
+            detail={exampleHourlyChargingCost == null ? "No one-hour estimate available" : `About €${exampleHourlyChargingCost.toFixed(2)} of energy for 1 hour at 11 kW · station fees excluded`}
             accent
           />
           <StatCard
@@ -1109,9 +1112,9 @@ function AIView({ token }) {
             detail={`${reliability}% · recommendations are estimates, not guarantees`}
           />
           <StatCard
-            label="Recommended charging periods"
-            value={`${chargeSlots.length}`}
-            detail="Each period represents 15 minutes"
+            label="Total recommended charging time"
+            value={formatDuration(recommendedChargeMinutes)}
+            detail="Combined recommended time during the next 24 hours"
           />
         </div>
       )}
