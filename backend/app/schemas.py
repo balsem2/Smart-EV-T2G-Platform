@@ -435,3 +435,15 @@ class RewardRead(BaseModel):
     transaction_time: datetime | None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AssistantMessageCreate(BaseModel):
+    message: str = Field(min_length=1, max_length=500)
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+
+class AssistantMessageRead(BaseModel):
+    intent: str
+    answer: str
+    suggestions: list[str]

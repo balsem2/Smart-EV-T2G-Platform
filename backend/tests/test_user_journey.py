@@ -35,6 +35,33 @@ class UserJourneyTests(unittest.TestCase):
         self.assertTrue(_connectors_are_compatible("Type 2 AC,CCS2 DC", "Type 2 AC"))
         self.assertFalse(_connectors_are_compatible("Type 1 AC,CCS1 DC", "Type 2 AC"))
 
+    def test_assistant_answers_from_authenticated_account_context(self):
+        registered = self.register_verified("Chat Driver", "chat@example.com")
+        headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+        self.client.post(
+            "/vehicles",
+            headers=headers,
+            json={"catalog_id": 1, "vehicle_age": 1},
+        )
+
+        response = self.client.post(
+            "/assistant/message",
+            headers=headers,
+            json={"message": "How does V2G work?"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["intent"], "v2g")
+        self.assertIn("1 V2G-compatible vehicle", response.json()["answer"])
+        self.assertTrue(response.json()["suggestions"])
+
+    def test_assistant_requires_authentication(self):
+        response = self.client.post(
+            "/assistant/message",
+            json={"message": "How do rewards work?"},
+        )
+        self.assertEqual(response.status_code, 401)
+
     def test_separate_v2g_offer_respects_reserve_and_credits_reward_once(self):
         registered = self.register_verified("Grid Helper", "grid@example.com")
         headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}

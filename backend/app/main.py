@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import ping_database
-from app.routers import ai, auth, catalog, charging_requests, notifications, operator, optimization, payments, profile, reservations, stations, v2g_offers, vehicles
+from app.routers import ai, assistant, auth, catalog, charging_requests, notifications, operator, optimization, payments, profile, reservations, stations, v2g_offers, vehicles
 
 
 app = FastAPI(
@@ -25,6 +25,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(assistant.router)
 app.include_router(ai.router)
 app.include_router(profile.router)
 app.include_router(catalog.router)

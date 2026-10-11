@@ -97,6 +97,7 @@ Negative electricity prices are preserved because they are valid market events.
 | --- | --- | --- |
 | GET | `/health` | Check the API process |
 | GET | `/health/db` | Check PostgreSQL connectivity |
+| POST | `/assistant/message` | Ask the account-aware Smart EV help assistant |
 | POST | `/auth/register`, `/auth/login` | Create or access an account |
 | GET/PATCH | `/me` | Read or edit the authenticated account |
 | POST | `/me/change-password` | Change password after checking the current one |

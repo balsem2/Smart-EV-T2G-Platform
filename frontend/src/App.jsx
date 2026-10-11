@@ -418,6 +418,102 @@ function VerificationBanner({ user, verificationToken, setVerificationToken, ref
   return <div className="verification-banner"><div><b>Verify your email address</b><span>{message || `A verification link was issued for ${user.email}.`}</span></div><div>{verificationToken && <button onClick={verify} disabled={busy}>Verify now</button>}<button onClick={resend} disabled={busy}>Resend link</button></div></div>;
 }
 
+function SmartAssistant({ token }) {
+  const [open, setOpen] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [messages, setMessages] = useState([
+    {
+      id: "welcome",
+      role: "assistant",
+      text: "Hello! I am the Smart EV assistant. Ask me about charging, V1G, V2G, stations, payments or rewards. You can write in English or French.",
+      suggestions: ["How do I plan a charge?", "What is Smart V1G?", "How does V2G work?"],
+    },
+  ]);
+  const messageListRef = useRef(null);
+
+  useEffect(() => {
+    if (!open || !messageListRef.current) return;
+    messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+  }, [messages, open, busy]);
+
+  const ask = async (text) => {
+    const cleanQuestion = text.trim();
+    if (!cleanQuestion || busy) return;
+    const userMessage = { id: `user-${Date.now()}`, role: "user", text: cleanQuestion };
+    setMessages((current) => [...current, userMessage]);
+    setQuestion("");
+    setBusy(true);
+    try {
+      const response = await api.post("/assistant/message", { message: cleanQuestion }, token);
+      setMessages((current) => [...current, {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        text: response.answer,
+        suggestions: response.suggestions,
+      }]);
+    } catch (requestError) {
+      setMessages((current) => [...current, {
+        id: `error-${Date.now()}`,
+        role: "assistant",
+        text: `I could not answer right now. ${requestError.message}`,
+        error: true,
+      }]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className={`smart-chat ${open ? "open" : ""}`}>
+      {open && (
+        <section className="smart-chat-panel" role="dialog" aria-label="Smart EV assistant">
+          <header className="smart-chat-header">
+            <div className="smart-chat-avatar" aria-hidden="true">EV</div>
+            <div><b>Smart EV Assistant</b><span><i /> Online · product help</span></div>
+            <button type="button" onClick={() => setOpen(false)} aria-label="Close assistant">×</button>
+          </header>
+          <div className="smart-chat-messages" ref={messageListRef} aria-live="polite">
+            {messages.map((message) => (
+              <div className={`smart-chat-turn ${message.role}`} key={message.id}>
+                <div className={`smart-chat-bubble ${message.error ? "error" : ""}`}>{message.text}</div>
+                {message.role === "assistant" && message.suggestions?.length > 0 && message === messages[messages.length - 1] && (
+                  <div className="smart-chat-suggestions">
+                    {message.suggestions.map((suggestion) => (
+                      <button type="button" key={suggestion} onClick={() => ask(suggestion)}>{suggestion}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            {busy && <div className="smart-chat-turn assistant"><div className="smart-chat-typing"><i /><i /><i /></div></div>}
+          </div>
+          <form className="smart-chat-form" onSubmit={(event) => { event.preventDefault(); ask(question); }}>
+            <input
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              maxLength="500"
+              placeholder="Ask a question…"
+              aria-label="Question for Smart EV assistant"
+            />
+            <button type="submit" disabled={busy || !question.trim()} aria-label="Send question">→</button>
+          </form>
+          <small className="smart-chat-disclaimer">Answers use verified Smart EV rules and your account data.</small>
+        </section>
+      )}
+      <button
+        type="button"
+        className="smart-chat-launcher"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        aria-label={open ? "Close Smart EV assistant" : "Open Smart EV assistant"}
+      >
+        {open ? "×" : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9l-4 3v-13Z" /><path d="M8.5 9.5h7M8.5 12.5h4.5" /></svg>}
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem("smartEvToken"));
   const [user, setUser] = useState(null);
@@ -569,6 +665,7 @@ export default function App() {
         {active === "operator" && ["operator", "admin"].includes(user.role) && <OperatorDashboard token={token} stations={stations} setError={setError} />}
         {active === "settings" && <SettingsView token={token} user={user} setUser={setUser} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} setError={setError} />}
       </main>
+      <SmartAssistant token={token} />
     </div>
   );
 }
