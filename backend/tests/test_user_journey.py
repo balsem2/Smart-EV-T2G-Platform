@@ -44,7 +44,7 @@ class UserJourneyTests(unittest.TestCase):
             json={"catalog_id": 1, "vehicle_age": 1},
         )
 
-        with patch("app.routers.assistant.settings.openai_api_key", None):
+        with patch("app.routers.assistant.settings.groq_api_key", None):
             response = self.client.post(
                 "/assistant/message",
                 headers=headers,
@@ -61,7 +61,7 @@ class UserJourneyTests(unittest.TestCase):
         registered = self.register_verified("LLM Driver", "llm@example.com")
         headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
         with patch(
-            "app.routers.assistant._ask_openai",
+            "app.routers.assistant._ask_groq",
             return_value="This grounded answer came from the configured LLM.",
         ) as llm:
             response = self.client.post(
@@ -78,7 +78,7 @@ class UserJourneyTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["source"], "llm")
-        self.assertEqual(response.json()["model"], "gpt-5.4-mini")
+        self.assertEqual(response.json()["model"], "llama-3.3-70b-versatile")
         self.assertIn("configured LLM", response.json()["answer"])
         self.assertEqual(len(llm.call_args.args[1]), 2)
 

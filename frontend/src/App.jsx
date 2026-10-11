@@ -485,7 +485,7 @@ function SmartAssistant({ token }) {
                 <div className={`smart-chat-bubble ${message.error ? "error" : ""}`}>{message.text}</div>
                 {message.role === "assistant" && message.source && (
                   <small className={`smart-chat-source ${message.source}`}>
-                    {message.source === "llm" ? `LLM · ${message.model}` : "Verified Smart EV fallback"}
+                    {message.source === "llm" ? `Groq · ${message.model}` : "Verified Smart EV fallback"}
                   </small>
                 )}
                 {message.role === "assistant" && message.suggestions?.length > 0 && message === messages[messages.length - 1] && (

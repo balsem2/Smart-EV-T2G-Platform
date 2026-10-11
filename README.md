@@ -133,17 +133,17 @@ The local demonstration account is `operator@smart-ev.at` with password
 
 ## LLM chatbot
 
-The floating Smart EV assistant uses the OpenAI Responses API when a key is
+The floating Smart EV assistant uses Groq Cloud's free-plan API when a key is
 configured. It sends the last eight chat turns plus a minimal verified account
-context (vehicle capabilities, points, wallet and reservation count). Responses
-are requested with `store=false`. If the key or remote service is unavailable,
-the assistant automatically returns the verified local knowledge-base answer.
+context (vehicle capabilities, points, wallet and reservation count). If the
+free quota or remote service is unavailable, the assistant automatically
+returns the verified local knowledge-base answer. It never calls OpenAI.
 
 ```env
-OPENAI_API_KEY=your-private-api-key
-OPENAI_MODEL=gpt-5.4-mini
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_TIMEOUT_SECONDS=20
+GROQ_API_KEY=your-private-groq-key
+GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_BASE_URL=https://api.groq.com/openai/v1
+GROQ_TIMEOUT_SECONDS=30
 ```
 
 Keep the real key only in `backend/.env`; never commit it. Restart the backend
