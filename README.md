@@ -11,7 +11,8 @@ current computer without changing the Windows hosts file.
 
 Academic full-stack prototype that compares normal EV charging, smart V1G charging,
 and simulated V2G operation using electricity price, grid load, solar generation,
-and wind generation.
+and wind generation. It also includes an account-aware Groq LLM assistant,
+operator-side V2G meter confirmation, rewards, invoices and notifications.
 
 ## Architecture
 
@@ -23,9 +24,11 @@ FastAPI REST API
       |
       +-- SQLAlchemy ORM --> PostgreSQL 18
       |
-      +-- Smart charging optimizer
-              |
-              +-- Austrian energy profile
+      +-- Smart charging optimizer --> 15-minute Austrian energy forecasts
+      |
+      +-- Groq Cloud LLM --> verified Smart EV account/platform context
+      |
+      +-- Energy-Charts + Open-Meteo + E-Control station data
 ```
 
 ## Implemented workflow
@@ -59,7 +62,7 @@ cd backend
 uvicorn app.main:app --reload
 ```
 
-API documentation: <http://127.0.0.1:8000/docs>
+API documentation: <http://api.smart-ev.localhost:8000/docs>
 
 ## Frontend setup
 
@@ -71,7 +74,7 @@ npm install
 npm run dev
 ```
 
-Dashboard: <http://127.0.0.1:5173>
+Dashboard: <http://smart-ev.localhost:5173>
 
 ## Energy data
 
@@ -103,7 +106,7 @@ Negative electricity prices are preserved because they are valid market events.
 | POST | `/me/change-password` | Change password after checking the current one |
 | GET/POST | `/me/payment-method` | Read or save the masked default demo card |
 | GET | `/catalog/vehicles` | List accepted EV models |
-| GET/POST | `/vehicles` | List or add catalogue EVs to the account |
+| GET/POST/DELETE | `/vehicles` | List, add or remove catalogue EVs from the account |
 | GET | `/stations` | List preloaded Austrian stations |
 | POST | `/stations/{id}/status` | Receive protected station availability events |
 | GET/POST | `/charging-requests` | List or create charging needs |
@@ -118,7 +121,8 @@ Negative electricity prices are preserved because they are valid market events.
 | GET/PATCH | `/notifications` | List and acknowledge account notifications |
 | POST | `/v2g-offers` | Request a compatibility-checked V2G grid offer |
 | GET | `/operator/dashboard` | View bookings and V2G jobs for one managed station |
-| GET | `/ai/model-info` | Inspect the trained forecasting model and metrics |
+| GET | `/ai/forecast-24h` | Return the next 96 future 15-minute energy slots |
+| GET | `/ai/model-info`, `/ai/benchmark` | Operator-only forecasting model details |
 
 Migration `018_reservations_v2g_operator_notifications.sql` adds the required
 tables and capability flags. For the academic operator console, run:
@@ -138,6 +142,12 @@ configured. It sends the last eight chat turns plus a minimal verified account
 context (vehicle capabilities, points, wallet and reservation count). If the
 free quota or remote service is unavailable, the assistant automatically
 returns the verified local knowledge-base answer. It never calls OpenAI.
+
+The assistant answers in English, French or Tunisian Arabizi. Exact numerical
+questions such as charging percentage per hour use deterministic engineering
+formulae rather than allowing the LLM to replace a useful estimate with a
+generic refusal. Best-time questions are grounded in the same current 24-hour
+forecast shown on the Smart assistant page.
 
 ```env
 GROQ_API_KEY=your-private-groq-key
@@ -216,9 +226,14 @@ fed recursively into the next. Ridge and HistGradientBoosting compete separately
 for each energy target; the validation winner is tested on later unseen data.
 Quantile models also provide an empirical 80% prediction interval.
 
-The customer-facing assistant now requests Austria's published 15-minute
-day-ahead market prices from Energy-Charts and aggregates them into an hourly
-price view. Published prices replace the model's price estimate only for the
+The customer-facing assistant requests Austria's published 15-minute day-ahead
+market prices from Energy-Charts. It displays all 96 quarter-hour bars for the
+next 24 hours: green for preferred charging, blue for an optional V2G period,
+and grey when a better period is available. Actionable period cards initially
+show eight results and can be expanded. Recommendations always begin at the
+current or next future quarter-hour; elapsed periods are never proposed.
+
+Published prices replace the model's price estimate only for the
 timestamps actually returned by the public source; missing periods remain
 clearly labelled as AI forecasts. Grid load, solar and wind remain model
 forecasts and are combined with price to rank the best continuous one-hour
@@ -256,8 +271,9 @@ back to its historical profile when recent data expires. Current observations
 do **not** establish current model accuracy: the trained model is still based on
 2015-2018 and needs prospective validation before production use.
 
-Run regression and end-to-end API tests with `pip install -r backend/requirements-dev.txt`
-and, from `backend`, `..\.venv\Scripts\python.exe -m unittest discover -s tests -v`.
+Run the 21 regression and end-to-end API tests with
+`pip install -r backend/requirements-dev.txt` and, from `backend`,
+`..\.venv\Scripts\python.exe -m unittest discover -s tests -v`.
 See `docs/PROJECT_REPORT.md` and `docs/DEMO_SCRIPT.md` for the report and demo.
 
 ## Controlled project data
