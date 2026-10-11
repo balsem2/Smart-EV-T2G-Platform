@@ -1265,11 +1265,11 @@ function AIView({ token, user }) {
         </article>
       )}
 
-      {tab === "forecast" && isModerator && (
+      {tab === "forecast" && (
         <article className="forecast-visual-card">
           <div className="forecast-visual-header">
             <div>
-              <p className="eyebrow">YOUR NEXT 24 HOURS · TAP ANY BAR FOR DETAILS</p>
+              <p className="eyebrow">YOUR NEXT 24 HOURS · EACH BAR IS 15 MINUTES</p>
               <h3>What should I do and when?</h3>
             </div>
             <div className="forecast-legend">
@@ -1298,7 +1298,7 @@ function AIView({ token, user }) {
                   key={s.timestamp || idx}
                   className={`forecast-bar-item ${recClass} ${isSelected ? "selected" : ""}`}
                   style={{ height: `${heightPct}%` }}
-                  title={`${new Date(s.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}: €${s.electricity_price}/MWh (${s.recommendation})`}
+                  title={`${viennaDay.format(new Date(s.timestamp))} · ${viennaTime.format(new Date(s.timestamp))}: €${s.electricity_price}/MWh (${s.recommendation})`}
                   onClick={() => setSelectedSlot(s)}
                   onMouseEnter={() => setSelectedSlot(s)}
                 />
@@ -1323,21 +1323,21 @@ function AIView({ token, user }) {
                 {selectedSlot.price_interval && <small className="muted">Likely range: €{selectedSlot.price_interval[0]}–€{selectedSlot.price_interval[1]}</small>}
                 <small className="muted">Not the final station tariff.</small>
               </div>
-              <div>
+              {isModerator && <div>
                 <small className="muted">GRID ACTIVITY</small>
                 <div><b>{levelFor(selectedSlot.grid_load, minLoad, maxLoad)}</b></div>
                 <small className="muted">Lower activity is generally better for charging.</small>
-              </div>
-              <div>
+              </div>}
+              {isModerator && <div>
                 <small className="muted">CLEAN ENERGY AVAILABLE</small>
                 <div><b>{levelFor(selectedSlot.renewable_total, minRenewable, maxRenewable)}</b></div>
                 <small className="muted">Based on expected solar and wind production.</small>
-              </div>
-              <div>
+              </div>}
+              {isModerator && <div>
                 <small className="muted">PREDICTION RELIABILITY</small>
                 <div><b>{selectedSlot.confidence_pct >= 75 ? "High" : selectedSlot.confidence_pct >= 50 ? "Medium" : "Low"}</b></div>
                 {selectedSlot.confidence_pct != null && <small className="muted">{selectedSlot.confidence_pct}% · actual conditions can change.</small>}
-              </div>
+              </div>}
               <div>
                 <span
                   className={`slot-action-tag ${
