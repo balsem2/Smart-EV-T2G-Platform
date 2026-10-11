@@ -21,6 +21,14 @@ BENCHMARK_REPORT_PATH = (
 )
 
 
+def _next_quarter_hour(value: datetime) -> datetime:
+    rounded = value.replace(second=0, microsecond=0)
+    remainder = rounded.minute % 15
+    if remainder or value.second or value.microsecond:
+        rounded += timedelta(minutes=15 - remainder)
+    return rounded
+
+
 def require_moderator(current_user: CurrentUser) -> None:
     if current_user.role not in {"operator", "admin"}:
         raise HTTPException(
@@ -85,8 +93,14 @@ def get_24h_forecast(
                 f"Invalid start_iso format: {error}",
             ) from error
     else:
-        # Pick the latest available timestamp in dataset so we have full ground truth context
-        start_time = latest_row.timestamp + timedelta(minutes=15)
+        # Recommendations must start in the future, never at an already elapsed
+        # observation-derived slot. The forecasting service validates that the
+        # live feed is recent enough to bridge the short gap from its last row.
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+        start_time = max(
+            latest_row.timestamp + timedelta(minutes=15),
+            _next_quarter_hour(now_utc),
+        )
 
     end_time = start_time + timedelta(hours=24)
 
