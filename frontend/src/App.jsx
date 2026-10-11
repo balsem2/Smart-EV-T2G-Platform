@@ -1101,8 +1101,7 @@ function AIView({ token, user }) {
   }
 
   const slots = forecast?.slots || [];
-  const hourlyPrices = forecast?.hourly_prices || [];
-  const usefulHours = hourlyPrices.filter((hour) => hour.action !== "WAIT").slice(0, 8);
+  const usefulSlots = slots.filter((slot) => slot.recommendation !== "STANDARD");
   const bestChargingWindow = forecast?.best_charging_window;
   const maxPrice = Math.max(...slots.map((s) => s.electricity_price), 10);
   const minPrice = Math.min(...slots.map((s) => s.electricity_price), 0);
@@ -1224,12 +1223,12 @@ function AIView({ token, user }) {
         </div>
       )}
 
-      {tab === "forecast" && usefulHours.length > 0 && (
+      {tab === "forecast" && usefulSlots.length > 0 && (
         <article className="content-card hourly-price-card">
           <div className="card-heading">
             <div>
-              <p className="eyebrow">USEFUL TIMES</p>
-              <h3>When to charge or support the grid</h3>
+              <p className="eyebrow">15-MINUTE RECOMMENDATIONS</p>
+              <h3>Every useful charging and V2G period</h3>
             </div>
             {isModerator && <span className={`data-source-pill ${forecast.price_source}`}>
               {priceSourceLabel(forecast.price_source)}
@@ -1237,22 +1236,24 @@ function AIView({ token, user }) {
           </div>
           <p className="market-price-warning">These are wholesale market prices. The station operator's retail tariff, taxes and charging fees are not included.</p>
           <div className="hourly-price-grid">
-            {usefulHours.map((hour) => (
+            {usefulSlots.map((slot) => {
+              const slotStart = new Date(slot.timestamp);
+              const slotEnd = new Date(slotStart.getTime() + 15 * 60 * 1000);
+              const actionClass = slot.recommendation === "V1G_CHARGE" ? "charge" : "v2g_export";
+              return (
               <button
                 type="button"
-                key={hour.austria_hour}
-                className={`hourly-price-row ${hour.action.toLowerCase()} ${bestChargingWindow && new Date(hour.start_time) <= new Date(bestChargingWindow.start_time) && new Date(hour.end_time) > new Date(bestChargingWindow.start_time) ? "best" : ""}`}
-                onClick={() => {
-                  const matchingSlot = slots.find((slot) => new Date(slot.timestamp) >= new Date(hour.start_time) && new Date(slot.timestamp) < new Date(hour.end_time));
-                  if (matchingSlot) setSelectedSlot(matchingSlot);
-                }}
+                key={slot.timestamp}
+                className={`hourly-price-row ${actionClass} ${bestChargingWindow && slotStart >= new Date(bestChargingWindow.start_time) && slotStart < new Date(bestChargingWindow.end_time) ? "best" : ""}`}
+                onClick={() => setSelectedSlot(slot)}
               >
-                <span>{viennaTime.format(new Date(hour.start_time))}–{viennaTime.format(new Date(hour.end_time))}</span>
-                <strong>€{hour.price_eur_mwh.toFixed(2)}<small>/MWh</small></strong>
-                <small>€{hour.price_eur_kwh.toFixed(4)}/kWh</small>
-                <em>{hour.action === "CHARGE" ? "Good to charge" : hour.action === "V2G_EXPORT" ? "V2G opportunity" : "Wait"}</em>
+                <span>{viennaDay.format(slotStart)} · {viennaTime.format(slotStart)}–{viennaTime.format(slotEnd)}</span>
+                <strong>€{slot.electricity_price.toFixed(2)}<small>/MWh</small></strong>
+                <small>€{(slot.electricity_price / 1000).toFixed(4)}/kWh</small>
+                <em>{slot.recommendation === "V1G_CHARGE" ? "Charge during these 15 minutes" : "V2G opportunity for 15 minutes"}</em>
               </button>
-            ))}
+              );
+            })}
           </div>
         </article>
       )}
