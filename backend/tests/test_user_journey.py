@@ -112,6 +112,24 @@ class UserJourneyTests(unittest.TestCase):
         self.assertIn("04:45", response.json()["answer"])
         self.assertIn("0.1739", response.json()["answer"])
 
+    def test_assistant_gives_a_numeric_percentage_per_hour_estimate(self):
+        registered = self.register_verified("Rate Driver", "rate@example.com")
+        headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+
+        with patch("app.routers.assistant._ask_groq") as llm:
+            response = self.client.post(
+                "/assistant/message",
+                headers=headers,
+                json={"message": "Une heure de charge peut ajouter combien de pourcentage ?"},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["intent"], "charging_rate")
+        self.assertIn("16,5 %/h", response.json()["answer"])
+        self.assertIn("60 kWh", response.json()["answer"])
+        self.assertEqual(response.json()["source"], "knowledge_base")
+        llm.assert_not_called()
+
     def test_assistant_requires_authentication(self):
         response = self.client.post(
             "/assistant/message",

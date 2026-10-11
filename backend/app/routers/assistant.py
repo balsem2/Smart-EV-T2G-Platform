@@ -40,6 +40,9 @@ Use only the verified account and platform context supplied below. If a fact is 
 When a verified best charging window is supplied, answer with its exact Austria-local start/end time, date,
 price and data source. Do not confuse energy timing with live station availability.
 Never invent live charger availability, retail station tariffs, reservations, payments, rewards, or meter readings.
+For charging speed questions, give a useful estimate instead of refusing: battery percentage per hour is approximately
+charger power in kW multiplied by 0.90 charging efficiency, divided by battery capacity in kWh, multiplied by 100.
+Clearly label it as an estimate and mention that DC charging slows as the battery approaches 80%.
 Explain that charger availability and physical V2G export are simulated in this academic prototype.
 Explain that displayed energy prices are wholesale market values, not final station retail tariffs.
 Do not claim to perform account changes, payments, reservations, or physical charging actions.
@@ -183,6 +186,15 @@ def _asks_for_best_charging_time(text: str) -> bool:
     return mentions_charging and mentions_timing
 
 
+def _asks_for_charging_rate(text: str) -> bool:
+    mentions_charging = _contains(
+        text, "charge", "charging", "charger", "recharge", "recharger", "nchagi", "nchargi", "chargi"
+    )
+    mentions_percentage = _contains(text, "pourcentage", "percentage", "percent", "pourcent", "soc")
+    mentions_hour = _contains(text, "heure", "hour", "par heure", "per hour", "fi se3a", "b se3a")
+    return mentions_charging and mentions_percentage and mentions_hour
+
+
 def _best_charging_context(database_session: DatabaseSession) -> dict | None:
     try:
         forecast = get_24h_forecast(start_iso=None, database_session=database_session)
@@ -217,6 +229,7 @@ def answer_message(
     tunisian = _is_tunisian(text)
     french = _is_french(text) and not tunisian
     asks_best_time = _asks_for_best_charging_time(text)
+    asks_charging_rate = _asks_for_charging_rate(text)
     best_charging_window = (
         _best_charging_context(database_session) if asks_best_time else None
     )
@@ -247,6 +260,28 @@ def answer_message(
             else f"Hello {first_name}. I can help with charging, V1G, V2G, stations, reservations, "
             "payments, vehicles and rewards."
         )
+    elif asks_charging_rate:
+        intent = "charging_rate"
+        if tunisian:
+            answer = (
+                "B sifa 3amma, el pourcentage fi se3a yet7seb haka: puissance mta3 chargeur (kW) × 0.90 ÷ "
+                "capacité batterie (kWh) × 100. Exemple l batterie 60 kWh: 3.7 kW ≈ 5.6%/h, "
+                "7.4 kW ≈ 11.1%/h, 11 kW ≈ 16.5%/h, w 22 kW ≈ 33%/h. Hedhom estimations; "
+                "DC rapide yna9es débit mte3ou surtout ba3d 80%."
+            )
+        elif french:
+            answer = (
+                "En général : pourcentage gagné par heure ≈ puissance du chargeur (kW) × 0,90 ÷ capacité "
+                "de la batterie (kWh) × 100. Pour une batterie de 60 kWh : 3,7 kW ≈ 5,6 %/h, "
+                "7,4 kW ≈ 11,1 %/h, 11 kW ≈ 16,5 %/h et 22 kW ≈ 33 %/h. Ce sont des estimations : "
+                "la recharge rapide ralentit généralement au-dessus de 80 %."
+            )
+        else:
+            answer = (
+                "As a general estimate: battery percentage per hour ≈ charger power (kW) × 0.90 ÷ battery "
+                "capacity (kWh) × 100. For a 60 kWh battery: 3.7 kW ≈ 5.6%/h, 7.4 kW ≈ 11.1%/h, "
+                "11 kW ≈ 16.5%/h and 22 kW ≈ 33%/h. Fast DC charging usually slows above 80%."
+            )
     elif asks_best_time:
         intent = "best_charging_time"
         if best_charging_window:
@@ -400,6 +435,7 @@ def answer_message(
         )
 
     suggestions = {
+        "charging_rate": ["How do I plan a charge?", "What is Smart V1G?"],
         "best_charging_time": ["Chnowa Smart V1G?", "Kifeh nplanifi charge?"],
         "v2g": ["Which of my cars supports V2G?", "How are V2G rewards confirmed?"],
         "v1g": ["How do I plan a charge?", "How do my rewards work?"],
@@ -447,7 +483,9 @@ def answer_message(
         },
         "verified_fallback_answer": answer,
     }
-    llm_answer = _ask_groq(payload.message, payload.history, verified_context)
+    # Numeric charging-rate answers use the deterministic engineering formula
+    # above, so an LLM cannot replace a useful estimate with a generic refusal.
+    llm_answer = None if intent == "charging_rate" else _ask_groq(payload.message, payload.history, verified_context)
     return schemas.AssistantMessageRead(
         intent=intent,
         answer=llm_answer or answer,
