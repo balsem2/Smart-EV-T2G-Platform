@@ -1059,6 +1059,7 @@ function AIView({ token, user }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [showAllUsefulSlots, setShowAllUsefulSlots] = useState(false);
   const [evaluationTarget, setEvaluationTarget] = useState("electricity_price");
 
   useEffect(() => {
@@ -1102,6 +1103,7 @@ function AIView({ token, user }) {
 
   const slots = forecast?.slots || [];
   const usefulSlots = slots.filter((slot) => slot.recommendation !== "STANDARD");
+  const visibleUsefulSlots = showAllUsefulSlots ? usefulSlots : usefulSlots.slice(0, 8);
   const bestChargingWindow = forecast?.best_charging_window;
   const maxPrice = Math.max(...slots.map((s) => s.electricity_price), 10);
   const minPrice = Math.min(...slots.map((s) => s.electricity_price), 0);
@@ -1236,7 +1238,7 @@ function AIView({ token, user }) {
           </div>
           <p className="market-price-warning">These are wholesale market prices. The station operator's retail tariff, taxes and charging fees are not included.</p>
           <div className="hourly-price-grid">
-            {usefulSlots.map((slot) => {
+            {visibleUsefulSlots.map((slot) => {
               const slotStart = new Date(slot.timestamp);
               const slotEnd = new Date(slotStart.getTime() + 15 * 60 * 1000);
               const actionClass = slot.recommendation === "V1G_CHARGE" ? "charge" : "v2g_export";
@@ -1255,6 +1257,16 @@ function AIView({ token, user }) {
               );
             })}
           </div>
+          {usefulSlots.length > 8 && (
+            <button
+              type="button"
+              className="recommendations-toggle"
+              aria-expanded={showAllUsefulSlots}
+              onClick={() => setShowAllUsefulSlots((current) => !current)}
+            >
+              {showAllUsefulSlots ? "Show less ↑" : `View ${usefulSlots.length - 8} more ↓`}
+            </button>
+          )}
         </article>
       )}
 
