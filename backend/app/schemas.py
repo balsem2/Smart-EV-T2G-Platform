@@ -437,8 +437,16 @@ class RewardRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class AssistantChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=1_000)
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+
 class AssistantMessageCreate(BaseModel):
     message: str = Field(min_length=1, max_length=500)
+    history: list[AssistantChatTurn] = Field(default_factory=list, max_length=8)
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
@@ -447,3 +455,5 @@ class AssistantMessageRead(BaseModel):
     intent: str
     answer: str
     suggestions: list[str]
+    source: Literal["llm", "knowledge_base"] = "knowledge_base"
+    model: str | None = None

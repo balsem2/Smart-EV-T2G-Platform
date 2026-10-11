@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     econtrol_referer: str | None = None
     frontend_url: str = "http://smart-ev.localhost:5173"
     stripe_secret_key: str | None = None
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-5.4-mini"
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_timeout_seconds: int = 20
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None

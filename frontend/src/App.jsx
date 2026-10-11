@@ -445,12 +445,18 @@ function SmartAssistant({ token }) {
     setQuestion("");
     setBusy(true);
     try {
-      const response = await api.post("/assistant/message", { message: cleanQuestion }, token);
+      const history = messages
+        .filter((message) => message.id !== "welcome" && !message.error)
+        .slice(-8)
+        .map((message) => ({ role: message.role, content: message.text }));
+      const response = await api.post("/assistant/message", { message: cleanQuestion, history }, token);
       setMessages((current) => [...current, {
         id: `assistant-${Date.now()}`,
         role: "assistant",
         text: response.answer,
         suggestions: response.suggestions,
+        source: response.source,
+        model: response.model,
       }]);
     } catch (requestError) {
       setMessages((current) => [...current, {
@@ -477,6 +483,11 @@ function SmartAssistant({ token }) {
             {messages.map((message) => (
               <div className={`smart-chat-turn ${message.role}`} key={message.id}>
                 <div className={`smart-chat-bubble ${message.error ? "error" : ""}`}>{message.text}</div>
+                {message.role === "assistant" && message.source && (
+                  <small className={`smart-chat-source ${message.source}`}>
+                    {message.source === "llm" ? `LLM · ${message.model}` : "Verified Smart EV fallback"}
+                  </small>
+                )}
                 {message.role === "assistant" && message.suggestions?.length > 0 && message === messages[messages.length - 1] && (
                   <div className="smart-chat-suggestions">
                     {message.suggestions.map((suggestion) => (
@@ -498,7 +509,7 @@ function SmartAssistant({ token }) {
             />
             <button type="submit" disabled={busy || !question.trim()} aria-label="Send question">→</button>
           </form>
-          <small className="smart-chat-disclaimer">Answers use verified Smart EV rules and your account data.</small>
+          <small className="smart-chat-disclaimer">LLM answers are grounded with verified Smart EV rules and account context.</small>
         </section>
       )}
       <button

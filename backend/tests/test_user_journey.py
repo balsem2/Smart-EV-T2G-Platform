@@ -44,16 +44,43 @@ class UserJourneyTests(unittest.TestCase):
             json={"catalog_id": 1, "vehicle_age": 1},
         )
 
-        response = self.client.post(
-            "/assistant/message",
-            headers=headers,
-            json={"message": "How does V2G work?"},
-        )
+        with patch("app.routers.assistant.settings.openai_api_key", None):
+            response = self.client.post(
+                "/assistant/message",
+                headers=headers,
+                json={"message": "How does V2G work?"},
+            )
 
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["intent"], "v2g")
         self.assertIn("1 V2G-compatible vehicle", response.json()["answer"])
+        self.assertEqual(response.json()["source"], "knowledge_base")
         self.assertTrue(response.json()["suggestions"])
+
+    def test_assistant_uses_llm_answer_and_accepts_conversation_history(self):
+        registered = self.register_verified("LLM Driver", "llm@example.com")
+        headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+        with patch(
+            "app.routers.assistant._ask_openai",
+            return_value="This grounded answer came from the configured LLM.",
+        ) as llm:
+            response = self.client.post(
+                "/assistant/message",
+                headers=headers,
+                json={
+                    "message": "And what happens after I accept?",
+                    "history": [
+                        {"role": "user", "content": "Explain V2G"},
+                        {"role": "assistant", "content": "V2G exports spare energy."},
+                    ],
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["source"], "llm")
+        self.assertEqual(response.json()["model"], "gpt-5.4-mini")
+        self.assertIn("configured LLM", response.json()["answer"])
+        self.assertEqual(len(llm.call_args.args[1]), 2)
 
     def test_assistant_requires_authentication(self):
         response = self.client.post(

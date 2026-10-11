@@ -131,6 +131,25 @@ cd backend
 The local demonstration account is `operator@smart-ev.at` with password
 `SmartEV-Operator-2026`. Change or remove it before any non-local deployment.
 
+## LLM chatbot
+
+The floating Smart EV assistant uses the OpenAI Responses API when a key is
+configured. It sends the last eight chat turns plus a minimal verified account
+context (vehicle capabilities, points, wallet and reservation count). Responses
+are requested with `store=false`. If the key or remote service is unavailable,
+the assistant automatically returns the verified local knowledge-base answer.
+
+```env
+OPENAI_API_KEY=your-private-api-key
+OPENAI_MODEL=gpt-5.4-mini
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_TIMEOUT_SECONDS=20
+```
+
+Keep the real key only in `backend/.env`; never commit it. Restart the backend
+after changing these values. Each chatbot response labels whether it came from
+the configured LLM or the local fallback.
+
 ## Stripe test checkout and email
 
 Add a Stripe **test-mode** secret key to `backend/.env` to enable hosted test
