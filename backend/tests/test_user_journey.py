@@ -78,7 +78,7 @@ class UserJourneyTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["source"], "llm")
-        self.assertEqual(response.json()["model"], "llama-3.3-70b-versatile")
+        self.assertEqual(response.json()["model"], "qwen/qwen3.8-27b")
         self.assertIn("configured LLM", response.json()["answer"])
         self.assertEqual(len(llm.call_args.args[1]), 2)
 

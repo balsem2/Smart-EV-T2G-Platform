@@ -141,7 +141,7 @@ returns the verified local knowledge-base answer. It never calls OpenAI.
 
 ```env
 GROQ_API_KEY=your-private-groq-key
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=qwen/qwen3.8-27b
 GROQ_BASE_URL=https://api.groq.com/openai/v1
 GROQ_TIMEOUT_SECONDS=30
 ```

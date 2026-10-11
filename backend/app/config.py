@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     frontend_url: str = "http://smart-ev.localhost:5173"
     stripe_secret_key: str | None = None
     groq_api_key: str | None = None
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "qwen/qwen3.8-27b"
     groq_base_url: str = "https://api.groq.com/openai/v1"
     groq_timeout_seconds: int = 30
     smtp_host: str | None = None
