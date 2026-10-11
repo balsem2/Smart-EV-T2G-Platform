@@ -1156,11 +1156,6 @@ function AIView({ token, user }) {
               You do not need to understand AI. We check tomorrow's prices, grid activity and clean energy,
               then tell you the best time to charge. Green means charge, blue means an optional V2G opportunity, and grey means wait.
             </p>
-            {forecast?.forecast_mode === "historical_demo" && (
-              <p className="muted">
-                Demonstration mode: these recommendations use historical Austrian data, not today's live market.
-              </p>
-            )}
             {forecast?.forecast_mode === "current" && (
               <p className="muted">
                 Real AI forecast updated from recent Austrian energy data. {forecast.published_price_slots} of {forecast.slot_count} price periods use published day-ahead market prices. Times are shown in Austria time.
