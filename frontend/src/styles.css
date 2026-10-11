@@ -193,6 +193,7 @@ button { cursor: pointer; }
 .ai-tab-btn.active { background: var(--lime); color: #0a1f18; border-color: var(--lime); font-weight: 800; }
 
 .ai-decision-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.ai-decision-grid.client-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .ai-decision-card { min-height: 155px; padding: 23px; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 18px; background: var(--paper); }
 .ai-decision-card span { margin-bottom: 12px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; }
 .ai-decision-card strong { color: var(--text); font: 800 22px "Manrope"; }
@@ -244,6 +245,7 @@ button { cursor: pointer; }
 @media (max-width: 900px) {
   .forecast-kpis { grid-template-columns: 1fr 1fr; }
   .ai-decision-grid { grid-template-columns: 1fr; }
+  .ai-decision-grid.client-summary { grid-template-columns: 1fr; }
   .hourly-price-grid { grid-template-columns: repeat(2, 1fr); }
   .ai-tip-grid { grid-template-columns: 1fr; }
 }

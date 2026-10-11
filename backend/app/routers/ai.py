@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.database import get_db
+from app.dependencies import CurrentUser
 from app.ml.energy_forecaster import MAX_FEED_LAG, forecast_energy, model_metadata
 from app.ml.live_prices import fetch_austrian_day_ahead_prices
 
@@ -20,8 +21,17 @@ BENCHMARK_REPORT_PATH = (
 )
 
 
+def require_moderator(current_user: CurrentUser) -> None:
+    if current_user.role not in {"operator", "admin"}:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Technical AI details are available only to operators and administrators.",
+        )
+
+
 @router.get("/model-info")
-def get_model_info() -> dict:
+def get_model_info(current_user: CurrentUser) -> dict:
+    require_moderator(current_user)
     try:
         return model_metadata()
     except FileNotFoundError as error:
@@ -32,7 +42,8 @@ def get_model_info() -> dict:
 
 
 @router.get("/benchmark")
-def get_benchmark_report() -> dict:
+def get_benchmark_report(current_user: CurrentUser) -> dict:
+    require_moderator(current_user)
     if not BENCHMARK_REPORT_PATH.exists():
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,

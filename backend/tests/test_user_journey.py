@@ -119,6 +119,21 @@ class UserJourneyTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 401)
 
+    def test_technical_ai_details_require_moderator_role(self):
+        registered = self.register_verified("Regular Driver", "regular-ai@example.com")
+        headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+        self.assertEqual(self.client.get("/ai/model-info").status_code, 401)
+        self.assertEqual(self.client.get("/ai/model-info", headers=headers).status_code, 403)
+        self.assertEqual(self.client.get("/ai/benchmark", headers=headers).status_code, 403)
+
+        with self.session_factory() as database_session:
+            user = database_session.query(User).filter(User.email == "regular-ai@example.com").one()
+            user.role = "operator"
+            database_session.commit()
+        with patch("app.routers.ai.model_metadata", return_value={"model_name": "test"}):
+            response = self.client.get("/ai/model-info", headers=headers)
+        self.assertEqual(response.status_code, 200, response.text)
+
     def test_separate_v2g_offer_respects_reserve_and_credits_reward_once(self):
         registered = self.register_verified("Grid Helper", "grid@example.com")
         headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}

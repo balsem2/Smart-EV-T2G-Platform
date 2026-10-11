@@ -670,7 +670,7 @@ export default function App() {
         {active === "overview" && <Overview user={user} vehicles={vehicles} stations={stations} requests={requests} rewards={rewards} reservations={reservations} setActive={setActive} />}
         {active === "plan" && <PlanView token={token} vehicles={vehicles} stations={stations} paymentMethod={paymentMethod} rewardPoints={user.reward_points} results={results} setResults={setResults} setError={setError} refreshProfile={refreshProfile} />}
         {active === "v2g" && <V2GOffersView token={token} vehicles={vehicles} stations={stations} setError={setError} refreshProfile={refreshProfile} />}
-        {active === "ai" && <AIView token={token} />}
+        {active === "ai" && <AIView token={token} user={user} />}
         {active === "vehicles" && <VehiclesView token={token} catalog={catalog} vehicles={vehicles} setVehicles={setVehicles} setResults={setResults} setError={setError} />}
         {active === "rewards" && <RewardsView token={token} user={user} rewards={rewards} payments={payments} />}
         {active === "operator" && ["operator", "admin"].includes(user.role) && <OperatorDashboard token={token} stations={stations} setError={setError} />}
@@ -1050,7 +1050,8 @@ function ForecastActualChart({ samples }) {
   return <div className="evaluation-chart"><svg viewBox="0 0 100 40" preserveAspectRatio="none" role="img" aria-label="Actual and predicted values over 96 held-out quarter-hour samples"><polyline className="actual-line" points={points("actual")} /><polyline className="predicted-line" points={points("predicted")} /></svg><div className="evaluation-legend"><span><i className="actual-dot" />Actual</span><span><i className="predicted-dot" />Predicted</span></div></div>;
 }
 
-function AIView({ token }) {
+function AIView({ token, user }) {
+  const isModerator = ["operator", "admin"].includes(user?.role);
   const [tab, setTab] = useState("forecast");
   const [forecast, setForecast] = useState(null);
   const [benchmark, setBenchmark] = useState(null);
@@ -1065,8 +1066,8 @@ function AIView({ token }) {
     setLoading(true);
     Promise.all([
       api.get("/ai/forecast-24h", token).catch(() => null),
-      api.get("/ai/benchmark", token).catch(() => null),
-      api.get("/ai/model-info", token).catch(() => null),
+      isModerator ? api.get("/ai/benchmark", token).catch(() => null) : Promise.resolve(null),
+      isModerator ? api.get("/ai/model-info", token).catch(() => null) : Promise.resolve(null),
     ])
       .then(([fc, bm, info]) => {
         if (!mounted) return;
@@ -1089,7 +1090,7 @@ function AIView({ token }) {
     return () => {
       mounted = false;
     };
-  }, [token]);
+  }, [token, isModerator]);
 
   if (loading) {
     return (
@@ -1101,6 +1102,7 @@ function AIView({ token }) {
 
   const slots = forecast?.slots || [];
   const hourlyPrices = forecast?.hourly_prices || [];
+  const usefulHours = hourlyPrices.filter((hour) => hour.action !== "WAIT").slice(0, 8);
   const bestChargingWindow = forecast?.best_charging_window;
   const maxPrice = Math.max(...slots.map((s) => s.electricity_price), 10);
   const minPrice = Math.min(...slots.map((s) => s.electricity_price), 0);
@@ -1165,7 +1167,7 @@ function AIView({ token }) {
             )}
           </div>
         </div>
-        <div className="ai-tab-buttons">
+        {isModerator && <div className="ai-tab-buttons">
           <button
             className={`ai-tab-btn ${tab === "forecast" ? "active" : ""}`}
             onClick={() => setTab("forecast")}
@@ -1176,13 +1178,13 @@ function AIView({ token }) {
             className={`ai-tab-btn ${tab === "benchmark" ? "active" : ""}`}
             onClick={() => setTab("benchmark")}
           >
-            Technical details
+            Moderator details
           </button>
-        </div>
+        </div>}
       </article>
 
       {tab === "forecast" && (
-        <div className="ai-decision-grid">
+        <div className="ai-decision-grid client-summary">
           <article className="ai-decision-card charge">
             <span>BEST 1-HOUR CHARGING PERIOD</span>
             <strong>{readableWindow(bestChargingWindow)}</strong>
@@ -1193,15 +1195,10 @@ function AIView({ token }) {
             <strong>{readableSlotTime(bestExportSlot)}</strong>
             <p>{bestExportSlot ? "If your battery has spare energy above your reserve, the grid may offer a reward around this time." : "There is no useful V2G opportunity in this forecast."}</p>
           </article>
-          <article className="ai-decision-card explanation">
-            <span>WHY THIS HELPS</span>
-            <strong>We compare the next 24 hours</strong>
-            <p>The assistant checks prices and grid conditions throughout the day. You only choose the suggested time; the technical calculations stay in the background.</p>
-          </article>
         </div>
       )}
 
-      {tab === "forecast" && forecast?.summary && (
+      {tab === "forecast" && isModerator && forecast?.summary && (
         <div className="stat-grid forecast-kpis">
           <StatCard
             label="Best 1-hour average market price"
@@ -1227,20 +1224,20 @@ function AIView({ token }) {
         </div>
       )}
 
-      {tab === "forecast" && hourlyPrices.length > 0 && (
+      {tab === "forecast" && usefulHours.length > 0 && (
         <article className="content-card hourly-price-card">
           <div className="card-heading">
             <div>
-              <p className="eyebrow">AUSTRIAN PRICE BY HOUR</p>
-              <h3>When electricity is cheaper</h3>
+              <p className="eyebrow">USEFUL TIMES</p>
+              <h3>When to charge or support the grid</h3>
             </div>
-            <span className={`data-source-pill ${forecast.price_source}`}>
+            {isModerator && <span className={`data-source-pill ${forecast.price_source}`}>
               {priceSourceLabel(forecast.price_source)}
-            </span>
+            </span>}
           </div>
           <p className="market-price-warning">These are wholesale market prices. The station operator's retail tariff, taxes and charging fees are not included.</p>
           <div className="hourly-price-grid">
-            {hourlyPrices.map((hour) => (
+            {usefulHours.map((hour) => (
               <button
                 type="button"
                 key={hour.austria_hour}
@@ -1263,11 +1260,11 @@ function AIView({ token }) {
       {tab === "forecast" && forecast?.tips?.length > 0 && (
         <article className="content-card ai-tips-card">
           <div className="card-heading"><div><p className="eyebrow">SMART TIPS</p><h3>How to use this recommendation</h3></div></div>
-          <div className="ai-tip-grid">{forecast.tips.map((tip, index) => <div key={tip}><b>{String(index + 1).padStart(2, "0")}</b><p>{tip}</p></div>)}</div>
+          <div className="ai-tip-grid">{forecast.tips.slice(0, 3).map((tip, index) => <div key={tip}><b>{String(index + 1).padStart(2, "0")}</b><p>{tip}</p></div>)}</div>
         </article>
       )}
 
-      {tab === "forecast" && (
+      {tab === "forecast" && isModerator && (
         <article className="forecast-visual-card">
           <div className="forecast-visual-header">
             <div>
@@ -1363,7 +1360,7 @@ function AIView({ token }) {
         </article>
       )}
 
-      {tab === "benchmark" && (
+      {isModerator && tab === "benchmark" && (
         <article className="content-card">
           <div className="card-heading">
             <div>
