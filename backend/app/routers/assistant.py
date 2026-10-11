@@ -6,8 +6,10 @@ import json
 import logging
 import re
 import unicodedata
+from datetime import datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter
 from sqlalchemy import func, select
@@ -16,10 +18,12 @@ from app import crud, schemas
 from app.config import settings
 from app.dependencies import CurrentUser, DatabaseSession
 from app.models import Reservation, Station
+from app.routers.ai import get_24h_forecast
 
 
 router = APIRouter(prefix="/assistant", tags=["Assistant"])
 logger = logging.getLogger(__name__)
+VIENNA = ZoneInfo("Europe/Vienna")
 
 DEFAULT_SUGGESTIONS = [
     "How do I plan a charge?",
@@ -30,8 +34,11 @@ DEFAULT_SUGGESTIONS = [
 
 LLM_INSTRUCTIONS = """You are the Smart EV in-app assistant for an academic Austrian EV charging platform.
 Answer in the same language as the user (English, French, or Tunisian Arabic written in Latin characters).
+If the detected language is Tunisian Arabizi, answer naturally in Tunisian Arabizi, never in English.
 Be concise, helpful, and use at most 140 words unless the user explicitly requests details.
 Use only the verified account and platform context supplied below. If a fact is absent, say that you do not know.
+When a verified best charging window is supplied, answer with its exact Austria-local start/end time, date,
+price and data source. Do not confuse energy timing with live station availability.
 Never invent live charger availability, retail station tariffs, reservations, payments, rewards, or meter readings.
 Explain that charger availability and physical V2G export are simulated in this academic prototype.
 Explain that displayed energy prices are wholesale market values, not final station retail tariffs.
@@ -124,6 +131,82 @@ def _is_french(text: str) -> bool:
     )
 
 
+def _is_tunisian(text: str) -> bool:
+    return _contains(
+        text,
+        "chnowa",
+        "kifeh",
+        "nheb",
+        "anahou",
+        "a7sen",
+        "ahsen",
+        "wa9et",
+        "waket",
+        "nchagi",
+        "nchargi",
+        "ghodwa",
+        "tawa",
+        "karhba",
+        "barcha",
+        "fih",
+    )
+
+
+def _asks_for_best_charging_time(text: str) -> bool:
+    mentions_charging = _contains(
+        text,
+        "charge",
+        "charging",
+        "charger",
+        "recharge",
+        "nchagi",
+        "nchargi",
+        "chargi",
+    )
+    mentions_timing = _contains(
+        text,
+        "best time",
+        "best period",
+        "when",
+        "tomorrow",
+        "meilleur moment",
+        "meilleure heure",
+        "quand",
+        "demain",
+        "a7sen wa9et",
+        "ahsen wa9et",
+        "wa9et",
+        "waket",
+        "ghodwa",
+        "dm1",
+    )
+    return mentions_charging and mentions_timing
+
+
+def _best_charging_context(database_session: DatabaseSession) -> dict | None:
+    try:
+        forecast = get_24h_forecast(start_iso=None, database_session=database_session)
+    except Exception as error:
+        logger.warning("Best charging window is unavailable for assistant: %s", error)
+        return None
+    window = forecast.get("best_charging_window")
+    if not window:
+        return None
+    start = datetime.fromisoformat(window["start_time"]).astimezone(VIENNA)
+    end = datetime.fromisoformat(window["end_time"]).astimezone(VIENNA)
+    return {
+        "date": start.strftime("%d/%m/%Y"),
+        "start_time": start.strftime("%H:%M"),
+        "end_time": end.strftime("%H:%M"),
+        "average_wholesale_price_eur_kwh": window["average_price_eur_kwh"],
+        "price_source": window["price_source"],
+        "forecast_mode": forecast["forecast_mode"],
+        "confidence_pct": window.get("average_confidence_pct"),
+        "timezone": "Europe/Vienna",
+        "retail_tariff_warning": "Wholesale market estimate, not the station's final retail tariff.",
+    }
+
+
 @router.post("/message", response_model=schemas.AssistantMessageRead)
 def answer_message(
     payload: schemas.AssistantMessageCreate,
@@ -131,7 +214,12 @@ def answer_message(
     current_user: CurrentUser,
 ) -> schemas.AssistantMessageRead:
     text = _normalise(payload.message)
-    french = _is_french(text)
+    tunisian = _is_tunisian(text)
+    french = _is_french(text) and not tunisian
+    asks_best_time = _asks_for_best_charging_time(text)
+    best_charging_window = (
+        _best_charging_context(database_session) if asks_best_time else None
+    )
     vehicles = crud.list_vehicles(database_session, current_user.id)
     active_reservations = database_session.scalar(
         select(func.count(Reservation.id)).where(
@@ -159,6 +247,37 @@ def answer_message(
             else f"Hello {first_name}. I can help with charging, V1G, V2G, stations, reservations, "
             "payments, vehicles and rewards."
         )
+    elif asks_best_time:
+        intent = "best_charging_time"
+        if best_charging_window:
+            window = best_charging_window
+            if tunisian:
+                answer = (
+                    f"A7sen wa9et tchargi fih howa nhar {window['date']} men "
+                    f"{window['start_time']} lel {window['end_time']} (wa9et Austria). "
+                    f"El moyenne mta3 soum el marché hiya €{window['average_wholesale_price_eur_kwh']:.4f}/kWh. "
+                    "Hedha soum wholesale estimé, mouch tarif final mta3 station."
+                )
+            elif french:
+                answer = (
+                    f"La meilleure fenêtre estimée est le {window['date']} de "
+                    f"{window['start_time']} à {window['end_time']} (heure d'Autriche), avec un prix de marché "
+                    f"moyen de €{window['average_wholesale_price_eur_kwh']:.4f}/kWh. Ce n'est pas le tarif final de la station."
+                )
+            else:
+                answer = (
+                    f"The best estimated window is {window['date']} from {window['start_time']} to "
+                    f"{window['end_time']} Austria time, with an average wholesale price of "
+                    f"€{window['average_wholesale_price_eur_kwh']:.4f}/kWh. This is not the station's final tariff."
+                )
+        else:
+            answer = (
+                "Ma najamch n7added wa9et fiable taw khater forecast récent mouch disponible. Jarreb ba3d chweya."
+                if tunisian
+                else "La meilleure période n'est pas disponible actuellement. Réessayez après la synchronisation des données."
+                if french
+                else "The best charging period is currently unavailable. Try again after the energy data sync."
+            )
     elif _contains(text, "reward", "rewards", "point", "points", "wallet", "recompense", "recompenses", "portefeuille", "flous"):
         intent = "rewards"
         answer = (
@@ -281,6 +400,7 @@ def answer_message(
         )
 
     suggestions = {
+        "best_charging_time": ["Chnowa Smart V1G?", "Kifeh nplanifi charge?"],
         "v2g": ["Which of my cars supports V2G?", "How are V2G rewards confirmed?"],
         "v1g": ["How do I plan a charge?", "How do my rewards work?"],
         "rewards": ["How does V2G work?", "Where can I see my invoices?"],
@@ -320,6 +440,10 @@ def answer_message(
             "energy_sources": ["Open Power System Data", "Energy-Charts", "Open-Meteo"],
             "charging_modes": ["Normal", "Smart V1G"],
             "v2g_is_a_separate_grid_service": True,
+            "best_charging_window": best_charging_window,
+            "detected_user_language": (
+                "Tunisian Arabic (Arabizi)" if tunisian else "French" if french else "English"
+            ),
         },
         "verified_fallback_answer": answer,
     }

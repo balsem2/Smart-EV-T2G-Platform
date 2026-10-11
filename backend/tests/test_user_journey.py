@@ -82,6 +82,36 @@ class UserJourneyTests(unittest.TestCase):
         self.assertIn("configured LLM", response.json()["answer"])
         self.assertEqual(len(llm.call_args.args[1]), 2)
 
+    def test_assistant_understands_tunisian_best_charging_time(self):
+        registered = self.register_verified("Tunisian Driver", "tunisian@example.com")
+        headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+        window = {
+            "date": "12/10/2026",
+            "start_time": "03:45",
+            "end_time": "04:45",
+            "average_wholesale_price_eur_kwh": 0.1739,
+            "price_source": "published_day_ahead",
+            "forecast_mode": "current",
+            "confidence_pct": 49.0,
+            "timezone": "Europe/Vienna",
+            "retail_tariff_warning": "Wholesale market estimate, not the station's final retail tariff.",
+        }
+        with (
+            patch("app.routers.assistant._best_charging_context", return_value=window),
+            patch("app.routers.assistant._ask_groq", return_value=None),
+        ):
+            response = self.client.post(
+                "/assistant/message",
+                headers=headers,
+                json={"message": "anahou a7sen wa9et nchagi fih dm1"},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["intent"], "best_charging_time")
+        self.assertIn("03:45", response.json()["answer"])
+        self.assertIn("04:45", response.json()["answer"])
+        self.assertIn("0.1739", response.json()["answer"])
+
     def test_assistant_requires_authentication(self):
         response = self.client.post(
             "/assistant/message",
