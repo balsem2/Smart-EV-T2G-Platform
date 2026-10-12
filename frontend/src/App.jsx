@@ -176,6 +176,7 @@ function AuthScreen({ onAuthenticated }) {
 
 function VehicleForm({ catalog, onSubmit, busy, buttonLabel }) {
   const [form, setForm] = useState({ catalog_id: catalog[0]?.id ?? "", vehicle_age: 0 });
+  const [modelSearch, setModelSearch] = useState("");
 
   useEffect(() => {
     if (!form.catalog_id && catalog[0]) {
@@ -184,11 +185,26 @@ function VehicleForm({ catalog, onSubmit, busy, buttonLabel }) {
   }, [catalog, form.catalog_id]);
 
   const selected = catalog.find((vehicle) => vehicle.id === Number(form.catalog_id));
+  const matchingCatalog = catalog.filter((vehicle) =>
+    vehicle.model.toLowerCase().includes(modelSearch.trim().toLowerCase())
+  );
+  const visibleCatalog = selected && !matchingCatalog.some((vehicle) => vehicle.id === selected.id)
+    ? [selected, ...matchingCatalog]
+    : matchingCatalog;
   return (
     <form onSubmit={(event) => { event.preventDefault(); onSubmit({ catalog_id: Number(form.catalog_id), vehicle_age: Number(form.vehicle_age) }); }}>
+      <Field label={`Search the catalogue (${catalog.length} models)`}>
+        <input
+          type="search"
+          value={modelSearch}
+          onChange={(event) => setModelSearch(event.target.value)}
+          placeholder="Brand or model, e.g. ID.3"
+          aria-label="Search vehicle catalogue"
+        />
+      </Field>
       <Field label="Vehicle model">
         <select value={form.catalog_id} onChange={(event) => setForm({ ...form, catalog_id: event.target.value })} required>
-          {catalog.length ? catalog.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.model}</option>) : <option value="">No model available</option>}
+          {visibleCatalog.length ? visibleCatalog.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.model}</option>) : <option value="">No matching model</option>}
         </select>
       </Field>
       <Field label="Battery capacity"><input value={selected ? `${selected.battery_capacity} kWh` : "Select a model"} disabled /></Field>

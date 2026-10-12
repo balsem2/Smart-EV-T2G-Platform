@@ -295,9 +295,16 @@ See `docs/PROJECT_REPORT.md` and `docs/DEMO_SCRIPT.md` for the report and demo.
 
 ## Controlled project data
 
-The EV catalogue contains the five models present in the supplied charging
-dataset. Vehicle creation accepts a catalogue identifier, never a free-text
-model. The active Austrian station seed is stored in
+The EV catalogue contains 21 selectable models and battery variants from BMW,
+Chevrolet, Hyundai, Kia, Nissan, Renault, Tesla, Volkswagen, and Volvo. Exact
+battery variants are separate entries so charge-time and cost calculations use
+the selected capacity instead of a generic model estimate. The garage form
+includes catalogue search, and vehicle creation accepts a catalogue identifier,
+never a free-text model. New European entries use Type 2 AC and CCS2 DC; V2G is
+disabled unless the controlled project data explicitly enables it. Battery
+capacities were checked against official manufacturer specification pages.
+
+The active Austrian station seed is stored in
 `backend/data/austria_charging_stations.csv` and loaded by migration 005. The
 station identifiers, coordinates, operators, connectors, and charging power
 come from Austria's national E-Control Ladestellenverzeichnis. This keeps the
