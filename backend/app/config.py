@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     groq_model: str = "qwen/qwen3.8-27b"
     groq_base_url: str = "https://api.groq.com/openai/v1"
     groq_timeout_seconds: int = 30
+    energy_sync_enabled: bool = True
+    energy_sync_interval_seconds: int = 900
+    energy_sync_days: int = 10
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None

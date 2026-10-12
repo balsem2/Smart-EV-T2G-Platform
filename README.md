@@ -100,6 +100,7 @@ Negative electricity prices are preserved because they are valid market events.
 | --- | --- | --- |
 | GET | `/health` | Check the API process |
 | GET | `/health/db` | Check PostgreSQL connectivity |
+| GET | `/health/energy-sync` | Check the automatic 15-minute Austrian data refresh |
 | POST | `/assistant/message` | Ask the account-aware Smart EV help assistant |
 | POST | `/auth/register`, `/auth/login` | Create or access an account |
 | GET/PATCH | `/me` | Read or edit the authenticated account |
@@ -148,6 +149,12 @@ questions such as charging percentage per hour use deterministic engineering
 formulae rather than allowing the LLM to replace a useful estimate with a
 generic refusal. Best-time questions are grounded in the same current 24-hour
 forecast shown on the Smart assistant page.
+
+Verified local calculations also answer how long a 20%-to-80% charge takes,
+estimate its wholesale energy component, explain kW versus kWh, estimate range
+gained at 18 kWh/100 km, and check each saved vehicle's connector/V2G
+compatibility. Suggested questions automatically follow the detected English,
+French or Tunisian Arabizi language.
 
 ```env
 GROQ_API_KEY=your-private-groq-key
@@ -271,7 +278,17 @@ back to its historical profile when recent data expires. Current observations
 do **not** establish current model accuracy: the trained model is still based on
 2015-2018 and needs prospective validation before production use.
 
-Run the 21 regression and end-to-end API tests with
+The API now starts this refresh automatically at startup and repeats it every
+15 minutes. Configure it with `ENERGY_SYNC_ENABLED`,
+`ENERGY_SYNC_INTERVAL_SECONDS` and `ENERGY_SYNC_DAYS`; `/health/energy-sync`
+reports the latest result. The `--watch` command remains useful for a standalone
+import process but is no longer required for normal local operation.
+
+All customer, reservation, operator, reward, invoice, AI and V2G timestamps are
+rendered explicitly in `Europe/Vienna` and labelled **Austria time**, regardless
+of the browser device timezone.
+
+Run the 23 regression and end-to-end API tests with
 `pip install -r backend/requirements-dev.txt` and, from `backend`,
 `..\.venv\Scripts\python.exe -m unittest discover -s tests -v`.
 See `docs/PROJECT_REPORT.md` and `docs/DEMO_SCRIPT.md` for the report and demo.

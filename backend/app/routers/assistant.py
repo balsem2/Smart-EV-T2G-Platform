@@ -19,6 +19,7 @@ from app.config import settings
 from app.dependencies import CurrentUser, DatabaseSession
 from app.models import Reservation, Station
 from app.routers.ai import get_24h_forecast
+from app.routers.charging_requests import _connectors_are_compatible
 
 
 router = APIRouter(prefix="/assistant", tags=["Assistant"])
@@ -126,11 +127,16 @@ def _is_french(text: str) -> bool:
         "recharge",
         "voiture",
         "karhba",
+        "karhabti",
         "station",
         "paiement",
         "reservation",
         "recompense",
         "points",
+        "temps",
+        "autonomie",
+        "cout",
+        "entre",
     )
 
 
@@ -152,6 +158,11 @@ def _is_tunisian(text: str) -> bool:
         "karhba",
         "barcha",
         "fih",
+        "9adeh",
+        "9addeh",
+        "se3a",
+        "tetcharja",
+        "twassel",
     )
 
 
@@ -195,6 +206,65 @@ def _asks_for_charging_rate(text: str) -> bool:
     return mentions_charging and mentions_percentage and mentions_hour
 
 
+def _mentions_charging(text: str) -> bool:
+    return _contains(
+        text, "charge", "charging", "charger", "recharge", "recharger", "nchagi", "nchargi", "chargi", "tetcharja"
+    )
+
+
+def _asks_for_charging_duration(text: str) -> bool:
+    timing = _contains(
+        text, "combien de temps", "duree", "duration", "how long", "temps necessaire", "9adeh wa9t", "9addeh wa9t"
+    )
+    return _mentions_charging(text) and timing
+
+
+def _asks_for_charging_cost(text: str) -> bool:
+    return _mentions_charging(text) and _contains(
+        text, "prix", "cout", "coute", "cost", "price", "combien payer", "soum", "tetkallef", "yeklef", "9adeh soum", "9addeh soum"
+    )
+
+
+def _asks_kw_kwh_difference(text: str) -> bool:
+    return "kw" in text.split() and "kwh" in text.split()
+
+
+def _asks_for_range_gain(text: str) -> bool:
+    return _contains(text, "autonomie", "range", "kilometres", "kilometer", "km", "twassel") and _mentions_charging(text)
+
+
+def _asks_for_compatibility(text: str) -> bool:
+    return _contains(text, "compatible", "compatibilite", "connector", "connecteur", "prise")
+
+
+def _percentage_pair(question: str) -> tuple[float, float]:
+    percentages = [float(value.replace(",", ".")) for value in re.findall(r"(\d{1,3}(?:[.,]\d+)?)\s*%", question)]
+    if len(percentages) >= 2 and 0 <= percentages[0] < percentages[1] <= 100:
+        return percentages[0], percentages[1]
+    normalised = _normalise(question)
+    match = re.search(r"(?:de|from|men)\s+(\d{1,3})\s+(?:a|to|lel)\s+(\d{1,3})", normalised)
+    if match:
+        start, target = float(match.group(1)), float(match.group(2))
+        if 0 <= start < target <= 100:
+            return start, target
+    return 20.0, 80.0
+
+
+def _charger_power(question: str) -> float:
+    match = re.search(r"(\d{1,3}(?:[.,]\d+)?)\s*kw\b", question.lower())
+    if match:
+        power = float(match.group(1).replace(",", "."))
+        if 1 <= power <= 350:
+            return power
+    return 11.0
+
+
+def _duration_label(hours: float) -> str:
+    total_minutes = max(1, round(hours * 60))
+    whole_hours, minutes = divmod(total_minutes, 60)
+    return f"{whole_hours} h {minutes:02d} min" if whole_hours else f"{minutes} min"
+
+
 def _best_charging_context(database_session: DatabaseSession) -> dict | None:
     try:
         forecast = get_24h_forecast(start_iso=None, database_session=database_session)
@@ -230,10 +300,24 @@ def answer_message(
     french = _is_french(text) and not tunisian
     asks_best_time = _asks_for_best_charging_time(text)
     asks_charging_rate = _asks_for_charging_rate(text)
+    asks_charging_duration = _asks_for_charging_duration(text)
+    asks_charging_cost = _asks_for_charging_cost(text)
+    asks_kw_kwh = _asks_kw_kwh_difference(text)
+    asks_range_gain = _asks_for_range_gain(text)
+    asks_compatibility = _asks_for_compatibility(text)
     best_charging_window = (
-        _best_charging_context(database_session) if asks_best_time else None
+        _best_charging_context(database_session)
+        if asks_best_time or asks_charging_cost else None
     )
     vehicles = crud.list_vehicles(database_session, current_user.id)
+    reference_vehicle = vehicles[0] if vehicles else None
+    battery_capacity = float(reference_vehicle.battery_capacity or 60) if reference_vehicle else 60.0
+    start_soc, target_soc = _percentage_pair(payload.message)
+    soc_gain = target_soc - start_soc
+    stored_energy_kwh = battery_capacity * soc_gain / 100
+    charger_power_kw = _charger_power(payload.message)
+    grid_energy_kwh = stored_energy_kwh / 0.90
+    estimated_hours = stored_energy_kwh / (charger_power_kw * 0.90)
     active_reservations = database_session.scalar(
         select(func.count(Reservation.id)).where(
             Reservation.user_id == current_user.id,
@@ -262,25 +346,47 @@ def answer_message(
         )
     elif asks_charging_rate:
         intent = "charging_rate"
+        percentage_per_hour = charger_power_kw * 0.90 / battery_capacity * 100
+        vehicle_label = reference_vehicle.model if reference_vehicle else "une batterie de référence de 60 kWh"
         if tunisian:
             answer = (
-                "B sifa 3amma, el pourcentage fi se3a yet7seb haka: puissance mta3 chargeur (kW) × 0.90 ÷ "
-                "capacité batterie (kWh) × 100. Exemple l batterie 60 kWh: 3.7 kW ≈ 5.6%/h, "
-                "7.4 kW ≈ 11.1%/h, 11 kW ≈ 16.5%/h, w 22 kW ≈ 33%/h. Hedhom estimations; "
-                "DC rapide yna9es débit mte3ou surtout ba3d 80%."
+                f"B {charger_power_kw:g} kW, {vehicle_label} ({battery_capacity:g} kWh) tetzed ta9riban "
+                f"{percentage_per_hour:.1f}% fi se3a. El formule: kW × 0.90 ÷ kWh batterie × 100. "
+                "Hedha ta9dir; charge DC tabda tbatta surtout fou9 80%."
             )
         elif french:
             answer = (
-                "En général : pourcentage gagné par heure ≈ puissance du chargeur (kW) × 0,90 ÷ capacité "
-                "de la batterie (kWh) × 100. Pour une batterie de 60 kWh : 3,7 kW ≈ 5,6 %/h, "
-                "7,4 kW ≈ 11,1 %/h, 11 kW ≈ 16,5 %/h et 22 kW ≈ 33 %/h. Ce sont des estimations : "
-                "la recharge rapide ralentit généralement au-dessus de 80 %."
+                f"Avec {charger_power_kw:g} kW, {vehicle_label} ({battery_capacity:g} kWh) gagne environ "
+                f"{percentage_per_hour:.1f} % par heure. Formule : kW × 0,90 ÷ capacité en kWh × 100. "
+                "C'est une estimation ; la recharge DC ralentit généralement au-dessus de 80 %."
             )
         else:
             answer = (
-                "As a general estimate: battery percentage per hour ≈ charger power (kW) × 0.90 ÷ battery "
-                "capacity (kWh) × 100. For a 60 kWh battery: 3.7 kW ≈ 5.6%/h, 7.4 kW ≈ 11.1%/h, "
-                "11 kW ≈ 16.5%/h and 22 kW ≈ 33%/h. Fast DC charging usually slows above 80%."
+                f"At {charger_power_kw:g} kW, {vehicle_label} ({battery_capacity:g} kWh) gains about "
+                f"{percentage_per_hour:.1f}% per hour. Formula: kW × 0.90 ÷ battery kWh × 100. "
+                "This is an estimate; DC charging usually slows above 80%."
+            )
+    elif asks_charging_duration:
+        intent = "charging_duration"
+        duration = _duration_label(estimated_hours)
+        model = reference_vehicle.model if reference_vehicle else "a 60 kWh reference battery"
+        if tunisian:
+            answer = (
+                f"Bech temchi men {start_soc:g}% lel {target_soc:g}% b {model}, test7a9 {stored_energy_kwh:.1f} kWh "
+                f"fel batterie. B chargeur {charger_power_kw:g} kW, ta9riban {duration}, b rendement 90%. "
+                "El wa9et ynajem yzid chwaya fou9 80%."
+            )
+        elif french:
+            answer = (
+                f"Pour passer de {start_soc:g} % à {target_soc:g} % avec {model}, il faut ajouter "
+                f"{stored_energy_kwh:.1f} kWh à la batterie. Avec une borne de {charger_power_kw:g} kW, "
+                f"comptez environ {duration}, avec 90 % de rendement. La charge peut ralentir au-dessus de 80 %."
+            )
+        else:
+            answer = (
+                f"To go from {start_soc:g}% to {target_soc:g}% with {model}, the battery needs "
+                f"{stored_energy_kwh:.1f} kWh. At {charger_power_kw:g} kW, allow about {duration} at 90% efficiency. "
+                "Charging can slow above 80%."
             )
     elif asks_best_time:
         intent = "best_charging_time"
@@ -313,6 +419,92 @@ def answer_message(
                 if french
                 else "The best charging period is currently unavailable. Try again after the energy data sync."
             )
+    elif asks_charging_cost:
+        intent = "charging_cost"
+        model = reference_vehicle.model if reference_vehicle else "a 60 kWh reference battery"
+        market_price = best_charging_window["average_wholesale_price_eur_kwh"] if best_charging_window else None
+        energy_cost = grid_energy_kwh * market_price if market_price is not None else None
+        if tunisian:
+            answer = (
+                f"Men {start_soc:g}% lel {target_soc:g}% b {model}, el borne testa3mel ta9riban {grid_energy_kwh:.1f} kWh "
+                + (f"w composante énergie wholesale ta9riban €{energy_cost:.2f}. " if energy_cost is not None else "")
+                + "Hedha mouch prix final: tarif station, taxes w frais opérateur yetzedou."
+            )
+        elif french:
+            answer = (
+                f"De {start_soc:g} % à {target_soc:g} % avec {model}, la borne consomme environ {grid_energy_kwh:.1f} kWh. "
+                + (f"Au meilleur prix wholesale actuel, la composante énergie est d'environ €{energy_cost:.2f}. " if energy_cost is not None else "Le prix wholesale actuel n'est pas disponible. ")
+                + "Ce n'est pas le prix final : le tarif de la station, les taxes et les frais opérateur s'ajoutent."
+            )
+        else:
+            answer = (
+                f"From {start_soc:g}% to {target_soc:g}% with {model}, the charger draws about {grid_energy_kwh:.1f} kWh. "
+                + (f"At the current best wholesale price, the energy component is about €{energy_cost:.2f}. " if energy_cost is not None else "The current wholesale price is unavailable. ")
+                + "This is not the final station price; operator fees and taxes are additional."
+            )
+    elif asks_kw_kwh:
+        intent = "kw_kwh"
+        if tunisian:
+            answer = (
+                "kW hiya puissance: 9addech el borne tnajem tchargi fard wa9et. kWh hiya quantité énergie: "
+                "9addech dkhal lel batterie. Exemple: borne 11 kW fi se3a ta3ti ta9riban 9.9 kWh lel batterie b rendement 90%."
+            )
+        elif french:
+            answer = (
+                "Le kW mesure la puissance instantanée de la borne ; le kWh mesure la quantité d'énergie reçue. "
+                "Exemple : une borne de 11 kW pendant 1 heure fournit environ 9,9 kWh à la batterie avec 90 % de rendement."
+            )
+        else:
+            answer = (
+                "kW measures the charger's instantaneous power; kWh measures the amount of energy delivered. "
+                "For example, an 11 kW charger running for one hour adds about 9.9 kWh at 90% efficiency."
+            )
+    elif asks_range_gain:
+        intent = "range_gain"
+        estimated_km = stored_energy_kwh / 18 * 100
+        model = reference_vehicle.model if reference_vehicle else "a 60 kWh reference battery"
+        if tunisian:
+            answer = (
+                f"Men {start_soc:g}% lel {target_soc:g}% b {model}, tzid {stored_energy_kwh:.1f} kWh, ya3ni ta9riban "
+                f"{estimated_km:.0f} km ken consommation 18 kWh/100 km. El autonomie tetbadel bel vitesse, météo w chauffage."
+            )
+        elif french:
+            answer = (
+                f"De {start_soc:g} % à {target_soc:g} % avec {model}, vous ajoutez {stored_energy_kwh:.1f} kWh, soit environ "
+                f"{estimated_km:.0f} km avec une consommation de 18 kWh/100 km. L'autonomie réelle varie selon la vitesse, la météo et le chauffage."
+            )
+        else:
+            answer = (
+                f"From {start_soc:g}% to {target_soc:g}% with {model}, you add {stored_energy_kwh:.1f} kWh, or roughly "
+                f"{estimated_km:.0f} km at 18 kWh/100 km. Actual range varies with speed, weather and climate control."
+            )
+    elif asks_compatibility:
+        intent = "compatibility"
+        stations = crud.list_stations(database_session)
+        if not vehicles:
+            answer = (
+                "Zid karhba fi My vehicles bech nverifiw el connecteur w V2G."
+                if tunisian else
+                "Ajoutez d'abord une voiture dans My vehicles pour vérifier ses connecteurs et le V2G."
+                if french else
+                "Add a car in My vehicles first so its connectors and V2G support can be checked."
+            )
+        else:
+            details = []
+            for vehicle in vehicles:
+                compatible_count = sum(
+                    _connectors_are_compatible(vehicle.connector_types, station.charger_type)
+                    and station.operational_status == "online"
+                    for station in stations
+                )
+                details.append(
+                    f"{vehicle.model}: {vehicle.connector_types}; {compatible_count} station(s); "
+                    f"V2G {'yes' if vehicle.supports_v2g else 'no'}"
+                )
+            prefix = "Compatibilité vérifiée : " if french else "Compatibility checked: "
+            if tunisian:
+                prefix = "El compatibilité mta3 krahebik: "
+            answer = prefix + " | ".join(details)
     elif _contains(text, "reward", "rewards", "point", "points", "wallet", "recompense", "recompenses", "portefeuille", "flous"):
         intent = "rewards"
         answer = (
@@ -434,19 +626,28 @@ def answer_message(
             "stations, vehicles, payments, reservations and rewards."
         )
 
-    suggestions = {
-        "charging_rate": ["How do I plan a charge?", "What is Smart V1G?"],
-        "best_charging_time": ["Chnowa Smart V1G?", "Kifeh nplanifi charge?"],
-        "v2g": ["Which of my cars supports V2G?", "How are V2G rewards confirmed?"],
-        "v1g": ["How do I plan a charge?", "How do my rewards work?"],
-        "rewards": ["How does V2G work?", "Where can I see my invoices?"],
-        "stations": ["How is connector compatibility checked?", "How do I plan a charge?"],
-        "vehicles": ["Which of my cars supports V2G?", "How are stations filtered?"],
-        "payment": ["How do my rewards work?", "How do I plan a charge?"],
-        "ai_prices": ["What is Smart V1G?", "Where does the data come from?"],
-        "planning": ["What is Smart V1G?", "How are stations filtered?"],
-        "data": ["How does the AI choose a charging time?", "Are station availabilities live?"],
-    }.get(intent, DEFAULT_SUGGESTIONS)
+    if tunisian:
+        suggestions = [
+            "9adeh wa9t bech nchargi men 20% lel 80%?",
+            "9adeh tetkallef el charge?",
+            "Karhabti compatible m3a anahi stations?",
+            "9adeh km nzid ki nchargi?",
+        ]
+    elif french:
+        suggestions = [
+            "Combien de temps pour recharger de 20 % à 80 % ?",
+            "Combien coûte cette recharge ?",
+            "Ma voiture est-elle compatible ?",
+            "Quelle autonomie vais-je gagner avec la recharge ?",
+        ]
+    else:
+        suggestions = {
+            "best_charging_time": ["What is Smart V1G?", "How do I plan a charge?"],
+            "v2g": ["Which of my cars supports V2G?", "How are V2G rewards confirmed?"],
+            "rewards": ["How does V2G work?", "Where can I see my invoices?"],
+            "stations": ["How is connector compatibility checked?", "How do I plan a charge?"],
+            "data": ["How does the AI choose a charging time?", "Are station availabilities live?"],
+        }.get(intent, DEFAULT_SUGGESTIONS)
 
     verified_context = {
         "account": {
@@ -483,9 +684,13 @@ def answer_message(
         },
         "verified_fallback_answer": answer,
     }
-    # Numeric charging-rate answers use the deterministic engineering formula
-    # above, so an LLM cannot replace a useful estimate with a generic refusal.
-    llm_answer = None if intent == "charging_rate" else _ask_groq(payload.message, payload.history, verified_context)
+    # Engineering calculations and connector checks remain deterministic so an
+    # LLM cannot replace verified numbers with a generic refusal or invention.
+    deterministic_intents = {
+        "charging_rate", "charging_duration", "charging_cost", "kw_kwh",
+        "range_gain", "compatibility",
+    }
+    llm_answer = None if intent in deterministic_intents else _ask_groq(payload.message, payload.history, verified_context)
     return schemas.AssistantMessageRead(
         intent=intent,
         answer=llm_answer or answer,

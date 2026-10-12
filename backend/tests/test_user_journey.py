@@ -125,9 +125,64 @@ class UserJourneyTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["intent"], "charging_rate")
-        self.assertIn("16,5 %/h", response.json()["answer"])
+        self.assertIn("16.5 % par heure", response.json()["answer"])
         self.assertIn("60 kWh", response.json()["answer"])
         self.assertEqual(response.json()["source"], "knowledge_base")
+        llm.assert_not_called()
+
+    def test_assistant_calculates_driver_charging_questions(self):
+        registered = self.register_verified("Calculation Driver", "calculation@example.com")
+        headers = {"Authorization": f"Bearer {registered.json()['access_token']}"}
+        self.client.post(
+            "/vehicles", headers=headers, json={"catalog_id": 1, "vehicle_age": 1}
+        )
+        window = {
+            "average_wholesale_price_eur_kwh": 0.10,
+            "date": "12/10/2026",
+            "start_time": "12:00",
+            "end_time": "13:00",
+        }
+
+        questions = [
+            (
+                "Combien de temps pour recharger de 20 % à 80 % sur 11 kW ?",
+                "charging_duration",
+                "3 h 02 min",
+            ),
+            (
+                "Combien coûte une recharge de 20 % à 80 % ?",
+                "charging_cost",
+                "€3.33",
+            ),
+            (
+                "Quelle est la différence entre kW et kWh ?",
+                "kw_kwh",
+                "puissance instantanée",
+            ),
+            (
+                "Quelle autonomie vais-je gagner avec une recharge de 20 % à 80 % ?",
+                "range_gain",
+                "167 km",
+            ),
+            (
+                "Ma voiture est-elle compatible avec les stations ?",
+                "compatibility",
+                "Test EV",
+            ),
+        ]
+        with (
+            patch("app.routers.assistant._best_charging_context", return_value=window),
+            patch("app.routers.assistant._ask_groq") as llm,
+        ):
+            for question, expected_intent, expected_text in questions:
+                response = self.client.post(
+                    "/assistant/message", headers=headers, json={"message": question}
+                )
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(response.json()["intent"], expected_intent)
+                self.assertIn(expected_text, response.json()["answer"])
+                self.assertEqual(response.json()["source"], "knowledge_base")
+                self.assertTrue(response.json()["suggestions"])
         llm.assert_not_called()
 
     def test_assistant_requires_authentication(self):

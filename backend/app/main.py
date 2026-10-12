@@ -1,15 +1,35 @@
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import ping_database
+from app.energy_sync import run_energy_sync, sync_status
 from app.routers import ai, assistant, auth, catalog, charging_requests, notifications, operator, optimization, payments, profile, reservations, stations, v2g_offers, vehicles
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    stop_event = asyncio.Event()
+    sync_task = None
+    if settings.energy_sync_enabled and settings.database_url:
+        sync_task = asyncio.create_task(run_energy_sync(stop_event))
+    try:
+        yield
+    finally:
+        stop_event.set()
+        if sync_task is not None:
+            sync_task.cancel()
+            await asyncio.gather(sync_task, return_exceptions=True)
 
 
 app = FastAPI(
     title=settings.app_name,
     version="0.1.0",
     description="Backend API for the Smart EV Transportation-to-Grid platform.",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -58,3 +78,12 @@ def database_health_check() -> dict[str, str]:
         ) from exc
 
     return {"status": "ok", "database": "connected"}
+
+
+@app.get("/health/energy-sync", tags=["System"])
+def energy_sync_health_check() -> dict[str, str | int | None]:
+    """Expose whether the automatic 15-minute source refresh is healthy."""
+    return {
+        **sync_status,
+        "interval_seconds": settings.energy_sync_interval_seconds,
+    }
